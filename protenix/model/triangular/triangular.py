@@ -719,6 +719,13 @@ class TriangleAttention(nn.Module):
         Returns:
             [*, I, J, C_in] output tensor
         """
+        if (not torch.is_grad_enabled() and not self.training and x.device.type == "musa"
+                and triangle_attention == "triattention" and torch.is_autocast_enabled("musa")
+                and torch.get_autocast_dtype("musa") == torch.bfloat16
+                and 1024 < x.shape[-2] <= 1536 and x.shape[-3] == x.shape[-2]
+                and os.getenv("PROTENIX_DISABLE_MUSA_TRIANGLE_NOCHUNK") != "1"):
+            chunk_size = None
+            STATS["attention_nochunk_calls"] += 1
         if mask is None:
             # [*, I, J]
             mask = x.new_ones(
