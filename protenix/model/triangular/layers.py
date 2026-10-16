@@ -551,6 +551,7 @@ def _tri_attention(
     k: torch.Tensor,
     v: torch.Tensor,
     biases: List[torch.Tensor],
+    confidence: bool = False,
 ) -> torch.Tensor:
     """ ""
     Compute attention using TriAttention kernel.
@@ -565,6 +566,21 @@ def _tri_attention(
         biases:
             List of biases that broadcast to [*, H, Q, K]
     """
+    # Main-trunk inference uses MUSA Flash. Confidence keeps the v21 path below.
+    if q.device.type == "musa" and not torch.is_grad_enabled() and not confidence:
+        supported = (q.dtype == torch.bfloat16 and k.dtype == q.dtype and v.dtype == q.dtype
+                     and q.ndim == 4 and q.shape[-3] == 4 and q.shape[-1] == 32
+                     and len(biases) == 2)
+        if supported and not bool(torch.any(biases[0] != 0).item()):
+            n, h, seq, d = q.shape
+            out, _, _, _ = torch.ops.aten._scaled_dot_product_attention_flash_musa.default(
+                q.contiguous(), k.contiguous(), v.contiguous(),
+                biases[1].reshape(1, h, seq, seq).contiguous(),
+                0.0, False, False, scale=1.0)
+            STATS["flash_calls"] += 1
+            return out.transpose(-2, -3)
+        STATS["attention_fallback"] += 1
+        return _attention(q, k, v, biases).transpose(-2, -3)
     from protenix.model.tri_attention.op import TriAttentionFunction
 
     def reshape_dims(x: torch.Tensor) -> torch.Tensor:
