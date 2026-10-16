@@ -140,6 +140,11 @@ class DiffusionConditioning(nn.Module):
                 - s (torch.Tensor): [..., N_sample, N_tokens, c_s]
                 - z (torch.Tensor): [..., N_tokens, N_tokens, c_z]
         """
+        if (not self.training and not torch.is_grad_enabled() and t_hat_noise_level.device.type == "musa"
+                and t_hat_noise_level.ndim == 1 and t_hat_noise_level.numel() > 1
+                and t_hat_noise_level.stride(-1) == 0 and pair_z is not None and use_conditioning):
+            t_hat_noise_level = t_hat_noise_level[:1]
+            STATS["condition_share_calls"] += 1
         if pair_z is None:
             if not use_conditioning:
                 if inplace_safe:
