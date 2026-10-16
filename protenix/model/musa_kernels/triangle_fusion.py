@@ -127,4 +127,3 @@ class OutputGate(torch.autograd.Function):
         dx,dg = torch.empty_like(x),torch.empty_like(g)
         output_backward[(triton.cdiv(x.numel(),1024),)](x,g,dy.contiguous(),dx,dg,x.numel(),1024,num_warps=4)
         return dx,dg
-

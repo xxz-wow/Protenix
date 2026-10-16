@@ -199,6 +199,7 @@ class OpenfoldLinear(nn.Linear):
         return nn.functional.linear(input, self.weight, self.bias)
 
 
+
 class OpenFoldLayerNorm(nn.Module):
     def __init__(
         self,

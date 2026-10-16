@@ -1,0 +1,395 @@
+{
+  "operator_cases": {
+    "attnFalse": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "muloutFalse": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "stridedoutFalse": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "mulinFalse": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "stridedinFalse": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "maskFalse": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "attnTrue": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "muloutTrue": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "stridedoutTrue": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "mulinTrue": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "stridedinTrue": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "maskTrue": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "confidence0": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "confidence1": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "conditioning": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "pair": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "sdpatorch.float32": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "sdpatorch.bfloat16": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "transition": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "adaln": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    },
+    "weight_mutation": {
+      "exact": true,
+      "max_abs": 0.0,
+      "relative_l2": 0.0
+    }
+  },
+  "structures": [
+    {
+      "name": "7rev_warm",
+      "sample": 0,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 0.1898193359375
+    },
+    {
+      "name": "7rev_warm",
+      "sample": 1,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 0.268280029296875
+    },
+    {
+      "name": "7rev_warm",
+      "sample": 2,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 0.2713623046875
+    },
+    {
+      "name": "7rev_warm",
+      "sample": 3,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 0.16912841796875
+    },
+    {
+      "name": "7rev_warm",
+      "sample": 4,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 0.2164306640625
+    },
+    {
+      "name": "7rev",
+      "sample": 0,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 0.177947998046875
+    },
+    {
+      "name": "7rev",
+      "sample": 1,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 5184.84716796875
+    },
+    {
+      "name": "7rev",
+      "sample": 2,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 5184.8916015625
+    },
+    {
+      "name": "7rev",
+      "sample": 3,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 0.428955078125
+    },
+    {
+      "name": "7rev",
+      "sample": 4,
+      "atoms": 6629,
+      "finite": true,
+      "exact_coordinates": false,
+      "max_abs_coordinate": 0.2685546875
+    }
+  ],
+  "counters": {
+    "reference": {
+      "included": [
+        "fast_ln",
+        "sdpa",
+        "local",
+        "qkvg",
+        "swiglu",
+        "adaln",
+        "confv21"
+      ],
+      "excluded": [
+        "biasbf16",
+        "layout"
+      ],
+      "counts": {
+        "std_bf16": 102,
+        "std_fp32_to_bf16": 160,
+        "local_flatten": 24,
+        "qkvg": 96,
+        "swiglu": 307,
+        "adaln": 192,
+        "fast_ln": 1901,
+        "conf_v21": 80,
+        "bias_bf16_build": 0,
+        "layout": 0
+      },
+      "v21": {
+        "native_calls": 80,
+        "fallback_calls": 0,
+        "native_shapes": {
+          "(1, 851, 851, 4, 32)": 80
+        },
+        "fallback_shapes": {},
+        "backward_mode": "triton",
+        "flash_qkv_backward_calls": 0
+      },
+      "mutlass": {
+        "mutlass_loaded": true,
+        "confidence_mutlass_calls": 80,
+        "confidence_reference_checks": []
+      },
+      "flash_calls": 208,
+      "attention_fallback": 0,
+      "masked_fallback": 0,
+      "flash_shapes": {
+        "851x851": 208
+      },
+      "multiplication_calls": 0,
+      "multiplication_fallback": 0,
+      "qkvg_calls": 288,
+      "qkvg_fallback": 0,
+      "weight_builds": 112,
+      "mul_output_calls": 208,
+      "mul_output_fallback": 0,
+      "mul_weight_builds": 104,
+      "attention_nochunk_calls": 0,
+      "pair_cache_builds": 2,
+      "pair_norm_hits": 2,
+      "pair_bias_builds": 48,
+      "pair_bias_hits": 48,
+      "pair_norm_checks": 0,
+      "pair_bias_checks": 0,
+      "condition_share_calls": 4,
+      "condition_share_fallback": 0,
+      "condition_checks": 0,
+      "max_condition_relative_l2": 0.0,
+      "max_condition_abs_error": 0.0
+    },
+    "direct": {
+      "mul_weight_builds": 112,
+      "mul_output_calls": 208,
+      "weight_builds": 112,
+      "flash_calls": 208,
+      "qkvg_calls": 288,
+      "pair_cache_builds": 2,
+      "condition_share_calls": 4,
+      "pair_bias_builds": 48,
+      "pair_norm_hits": 2,
+      "pair_bias_hits": 48,
+      "confidence_mutlass_calls": 80,
+      "v21_native_calls": 80,
+      "counts": {
+        "fast_ln": 1901,
+        "std_bf16": 102,
+        "swiglu": 307,
+        "local_flatten": 24,
+        "std_fp32_to_bf16": 160,
+        "adaln": 192,
+        "qkvg": 96,
+        "conf_v21": 80
+      },
+      "implementation": "direct_model_source"
+    }
+  },
+  "summary": {
+    "reference": {
+      "formal_inputs": 1,
+      "formal_structures": 5,
+      "samples": 5,
+      "formal_rounds": 1,
+      "formal_log_seconds": 6.6,
+      "job_loop_including_warm_seconds": 35.72,
+      "warm_iteration_seconds_excluded": 26.478300980757922,
+      "job_loop_excluding_warm_seconds": 9.241699019242077,
+      "cases": [
+        {
+          "pdb_id": "7rev",
+          "shape": {
+            "N_asym": 2,
+            "N_token": 851,
+            "N_atom": 6629,
+            "N_msa": 6907
+          },
+          "samples": 5,
+          "log_seconds": 6.6
+        }
+      ],
+      "timing": "Formal logs include predict, postprocess and output; adjusted Job also includes formal data preparation. Both exclude warm and model startup/loading.",
+      "validation": "All warm and formal CIFs checked for sample/atom count and finite coordinates. Structural accuracy equivalence has not been evaluated."
+    },
+    "direct": {
+      "formal_inputs": 1,
+      "formal_structures": 5,
+      "samples": 5,
+      "formal_rounds": 1,
+      "formal_log_seconds": 6.58,
+      "job_loop_including_warm_seconds": 36.77,
+      "warm_iteration_seconds_excluded": 27.56461697164923,
+      "job_loop_excluding_warm_seconds": 9.205383028350774,
+      "cases": [
+        {
+          "pdb_id": "7rev",
+          "shape": {
+            "N_asym": 2,
+            "N_token": 851,
+            "N_atom": 6629,
+            "N_msa": 6907
+          },
+          "samples": 5,
+          "log_seconds": 6.58
+        }
+      ],
+      "timing": "Formal logs include predict, postprocess and output; adjusted Job also includes formal data preparation. Both exclude warm and model startup/loading.",
+      "validation": "All warm and formal CIFs checked for sample/atom count and finite coordinates. Structural accuracy equivalence has not been evaluated."
+    }
+  },
+  "coordinate_repeatability": {
+    "7rev_warm_old_repeat": {
+      "permutation": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "coordinate_rms": 0.05162985622882843,
+      "relative_l2": 5.216140561969951e-05,
+      "max_abs": 0.2900390625
+    },
+    "7rev_warm_migration": {
+      "permutation": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "coordinate_rms": 0.038492679595947266,
+      "relative_l2": 3.88889602618292e-05,
+      "max_abs": 0.2713623046875
+    },
+    "7rev_old_repeat": {
+      "permutation": [
+        0,
+        2,
+        1,
+        3,
+        4
+      ],
+      "coordinate_rms": 0.059894952923059464,
+      "relative_l2": 6.0609894717345014e-05,
+      "max_abs": 0.5570068359375
+    },
+    "7rev_migration": {
+      "permutation": [
+        0,
+        2,
+        1,
+        3,
+        4
+      ],
+      "coordinate_rms": 0.04349100589752197,
+      "relative_l2": 4.4010113924741745e-05,
+      "max_abs": 0.428955078125
+    }
+  },
+  "long_triangle": {
+    "tokens": 1025,
+    "reference_nochunk_calls": 1,
+    "direct_nochunk_calls": 1,
+    "finite": true,
+    "sha256": "a5743dfbaefbe27890f8aefe1849de8498c3dcb9787ada543bc4b0d03ac37deb"
+  }
+}
