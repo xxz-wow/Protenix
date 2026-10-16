@@ -14,12 +14,17 @@
 # Copyright 2021 AlQuraishi Laboratory
 
 
+import os
+from contextlib import nullcontext
+
 from abc import ABC, abstractmethod
 from functools import partial, partialmethod
 from typing import List, Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from protenix.model.musa_kernels.runtime import COUNTS, STATS
 
 from protenix.model.triangular.layers import Attention, LayerNorm, OpenfoldLinear
 from protenix.model.utils import chunk_layer, is_fp16_enabled, permute_final_dims

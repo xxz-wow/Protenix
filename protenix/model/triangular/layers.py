@@ -15,12 +15,14 @@
 
 import math
 import os
+import os
 from functools import partial, partialmethod
 from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
+from protenix.model.musa_kernels.runtime import COUNTS, STATS
 from scipy.stats import truncnorm
 
 from protenix.model.utils import (
@@ -417,6 +419,7 @@ class Attention(nn.Module):
                 - "triattention": Optimized tri-attention module
                 - "deepspeed": DeepSpeed's fused attention kernel
                 - "cuequivariance": nvidia cuequivariance attention kernel
+                - "musa_flash_no_padding": MUSA Flash forward with Triton backward
         Returns
             [*, Q, C_q] attention update
         """
@@ -425,6 +428,7 @@ class Attention(nn.Module):
             "deepspeed",
             "triattention",
             "cuequivariance",
+            "musa_flash_no_padding",
         ]
 
         if biases is None:
@@ -432,7 +436,10 @@ class Attention(nn.Module):
 
         # DeepSpeed attention kernel applies scaling internally
         q, k, v = self._prep_qkv(
-            q_x, kv_x, apply_scale=triangle_attention in ["torch", "triattention"]
+            q_x,
+            kv_x,
+            apply_scale=triangle_attention
+            in ["torch", "triattention", "musa_flash_no_padding"],
         )
 
         if q.shape[-2] <= 16:
@@ -447,6 +454,8 @@ class Attention(nn.Module):
             o = _deepspeed_evo_attn(q, k, v, biases)
         elif triangle_attention == "triattention":
             o = _tri_attention(q, k, v, biases)
+        elif triangle_attention == "musa_flash_no_padding":
+            o = _musa_flash_attention_no_padding(q, k, v, biases[1])
         elif triangle_attention == "cuequivariance":
             # Notes:
             #     (1) Context is saved for backward pass. You don't need to save it manually.
@@ -581,6 +590,35 @@ def _tri_attention(
 
     o = o.reshape(orig_shape)
     return o
+
+
+@torch.jit.ignore
+def _musa_flash_attention_no_padding(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    triangle_bias: torch.Tensor,
+) -> torch.Tensor:
+    from protenix.model.tri_attention.op import MusaFlashTriAttentionFunction
+
+    def reshape_dims(x: torch.Tensor) -> torch.Tensor:
+        no_batch_dims = len(x.shape[:-3])
+        if no_batch_dims < 2:
+            return x.reshape(*((1,) * (2 - no_batch_dims) + x.shape))
+        if no_batch_dims > 2:
+            return x.reshape(*((x.shape[0], -1) + x.shape[-3:]))
+        return x
+
+    q = q.transpose(-2, -3)
+    k = k.transpose(-2, -3)
+    v = v.transpose(-2, -3)
+    orig_shape = q.shape
+    q = reshape_dims(q)
+    k = reshape_dims(k)
+    v = reshape_dims(v)
+    triangle_bias = reshape_dims(triangle_bias)
+    output = MusaFlashTriAttentionFunction.apply(q, k, v, triangle_bias)
+    return output.reshape(orig_shape)
 
 
 def cuequivariance_triangular_attn(

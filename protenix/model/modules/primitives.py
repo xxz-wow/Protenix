@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import math
+import os
+import time
 from functools import partial
 from typing import Any, Optional, Union
 
@@ -28,6 +30,10 @@ from protenix.model.utils import (
     pad_at_dim,
     reshape_at_dim,
 )
+
+
+# Runtime counters are optional for normal imports.
+from protenix.model.musa_kernels.runtime import COUNTS as _quick_counts
 
 
 class Linear(nn.Linear):
@@ -83,7 +89,7 @@ class Linear(nn.Linear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         if self.precision is not None:
             input_dtype = input.dtype
-            with torch.amp.autocast("cuda", enabled=False):
+            with torch.amp.autocast("musa", enabled=False):
                 bias = (
                     self.bias.to(dtype=self.precision)
                     if self.bias is not None
@@ -258,6 +264,12 @@ def _attention(
     k = k.to(dtype=torch.float32)
     if attn_bias is not None:
         attn_bias = attn_bias.to(dtype=torch.float32)
+
+    # The current MUSA SDPA accepts only 3D/4D QKV and does not support
+    # attn_mask gradients. Use the equivalent matmul/softmax path so both
+    # inference and training retain the complete attention gradient.
+    if q.device.type == "musa":
+        use_efficient_implementation = False
 
     if use_efficient_implementation:
         attn_output = F.scaled_dot_product_attention(

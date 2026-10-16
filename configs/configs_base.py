@@ -127,7 +127,8 @@ model_configs = {
     "hidden_scale_up": False,  # whether to scale up hidden dim in pairformer and confidence head
     # switch of kernels
     "triangle_multiplicative": "cuequivariance",  # cuequivariance, torch
-    "triangle_attention": "cuequivariance",  # triattention, cuequivariance, deepspeed, torch
+    # triattention, cuequivariance, deepspeed, torch, musa_flash_no_padding
+    "triangle_attention": "cuequivariance",
     "enable_diffusion_shared_vars_cache": False,
     "enable_efficient_fusion": False,
     "enable_tf32": False,

@@ -20,6 +20,8 @@ import torch
 from torch import nn
 from torch.nn.parameter import Parameter
 
+from protenix.utils.accelerator import accelerator_name
+
 
 def grad_norm(params):
     total_norm = 0.0
@@ -199,9 +201,10 @@ def round_values(data, recursive=True):
 def autocasting_disable_decorator(disable_casting):
     def func_wrapper(func):
         def new_func(*args, **kwargs):
+            device_type = accelerator_name()
             _amp_context = (
-                torch.autocast(device_type="cuda", enabled=False)
-                if disable_casting
+                torch.autocast(device_type=device_type, enabled=False)
+                if disable_casting and device_type is not None
                 else nullcontext()
             )
 
