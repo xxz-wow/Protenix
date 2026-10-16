@@ -15,6 +15,7 @@
 from typing import Optional, Union
 
 import torch
+from protenix.model.musa_kernels.runtime import STATS
 import torch.nn as nn
 
 from protenix.model.modules.embedders import FourierEmbedding, RelativePositionEncoding
@@ -369,6 +370,25 @@ class DiffusionModule(nn.Module):
             torch.Tensor: coordinates update
                 [..., N_sample, N_atom, 3]
         """
+        pair_cache = None
+        if (not torch.is_grad_enabled() and not self.training and pair_z is not None
+                and use_conditioning and enable_efficient_fusion and pair_z.device.type == "musa"
+                and pair_z.shape[-2] <= 1536):
+            params = list(self.normalize.parameters())
+            for block in self.diffusion_transformer.blocks:
+                bias = block.attention_pair_bias
+                params.extend((bias.linear_nobias_z.weight, bias.layernorm_z.weight))
+            signature = (pair_z._version, pair_z.device, pair_z.dtype, tuple(pair_z.shape),
+                torch.is_autocast_enabled("musa"), torch.get_autocast_dtype("musa"),
+                tuple((id(w), w._version, w.device, w.dtype) for w in params))
+            pair_cache = getattr(self, "_musa_pair_cache", None)
+            if pair_cache is None or pair_cache["pair"] is not pair_z or pair_cache["signature"] != signature:
+                pair_cache = {"pair": pair_z, "signature": signature, "biases": {}}
+                self._musa_pair_cache = pair_cache
+                STATS["pair_cache_builds"] += 1
+        else:
+            # Release retained tensors when cache is bypassed (including training).
+            self._musa_pair_cache = None
         N_sample = r_noisy.size(-3)
         assert t_hat_noise_level.size(-1) == N_sample
 
@@ -463,14 +483,21 @@ class DiffusionModule(nn.Module):
                 self.layernorm_s(s_single)
             )  # [..., N_sample, N_token, c_token]
         if enable_efficient_fusion:
-            z = self.normalize(z_pair.to(dtype=torch.float32))
-            z = permute_final_dims(z, [2, 0, 1]).contiguous()
+            if pair_cache is not None and "channels" in pair_cache:
+                z = pair_cache["channels"]
+                STATS["pair_norm_hits"] += 1
+            else:
+                z = self.normalize(z_pair.to(dtype=torch.float32))
+                z = permute_final_dims(z, [2, 0, 1]).contiguous()
+                if pair_cache is not None:
+                    pair_cache["channels"] = z
         else:
             z = z_pair.to(dtype=torch.float32)
         a_token = self.diffusion_transformer(
             a=a_token.to(dtype=torch.float32),  # Upcast all inputs
             s=s_single.to(dtype=torch.float32),
             z=z,
+            pair_bias_cache=pair_cache,
             inplace_safe=inplace_safe,
             chunk_size=chunk_size,
             enable_efficient_fusion=enable_efficient_fusion,
