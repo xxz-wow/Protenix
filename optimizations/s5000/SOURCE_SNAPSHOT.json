@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-15",
+  "base_commit": "85767b811c40ed46e73a9b39519cf6bfca8701ba",
+  "tested_image": "registry.mthreads.com/public/protenix_v2:musa",
+  "tested_local_image_config_id": "sha256:001e5144d3f731004503c14023dd329a78284c981d7798c0cda26aa636c30422",
+  "torch": "2.9.1.post1",
+  "torch_musa": "2.9.1.post1",
+  "native_tested_sha256": {
+    "protenix/model/tri_attention/v21/libv21_training_fast_p36q32_repro.so": "505d8c26d4ae84a113fa623b7ecb1e13d0f3b1412d944d483f31abd5570a4c6b",
+    "protenix/model/layer_norm/fast_layer_norm_cuda_v2.so": "d3993c3b0aae9d0e828450af0eea98787a6b3db1524ce6e99523b89ed1359864",
+    "protenix/model/musa_kernels/mutlass_triangle_bmm/protenix_mutlass_triangle_bmm_v5.so": "46ff8e3410594f9273cab604205137990c59aad8df3f1a3632b0412181a5aeaa"
+  },
+  "v21_source_sha256": "462ddb260f8b1e83da249dd8d55ee79e845ae796b66bc15586bbfef1635dcb8c",
+  "note": "Historical 21PDB benchmark is from adapter implementation. Current source-integrated implementation has no model function replacement; see SOURCE_INTEGRATION.md for validation. Native image extensions are not redistributed.",
+  "source_integration_date": "2026-10-16"
+}

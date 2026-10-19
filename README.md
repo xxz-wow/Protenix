@@ -21,6 +21,21 @@ Protenix is built for high-accuracy structure prediction. It serves as an initia
 <img src="assets/protenix_predictions.gif" style="width: 100%; height: auto;" alt="Protenix predictions">
 
 
+## S5000 推理优化分支：实测环境
+
+本分支的优化面向 **摩尔线程 MTT S5000 / MUSA**。以下为21 PDB五采样结果对应的环境，均使用单卡：
+
+| 项目 | S5000 优化版 |
+| --- | --- |
+| 显卡 | MTT S5000，设备显示80 GiB |
+| S5000 实测镜像 | `registry.mthreads.com/public/protenix_v2:musa` |
+| 模型 / 精度 | `protenix_base_default_v0.5.0` / BF16 |
+| 测试配置 | 21 PDB，10 cycles，200 diffusion steps，5 samples，seed 101；MSA、cache、efficient fusion、TF32开启 |
+
+每个PDB先完整预热一次，再正式执行一次；预热时间不计入结果。优化已直接进入原模型函数，运行条件和测试入口见[优化说明与启动入口](optimizations/s5000/README.md)。实测镜像标识和扩展校验值见[环境快照](optimizations/s5000/SOURCE_SNAPSHOT.json)，逐项实现见[提交与报告索引](optimizations/s5000/COMMIT_GUIDE.md)。
+
+当前18项连续编号01～18，均直接修改原函数；每项代码和报告对应一个commit。21PDB五采样正式完整流程409.691秒，排除warm；相对原15项吞吐提升4.80%。运行开关和精度边界见[优化说明](optimizations/s5000/README.md)，同口径对照见[组合复测报告](docs/S5000推理优化组合复测_20261019.md)。
+
 ## 🎉 Latest Updates
 - **2026-04-08: Protenix-v2 Released** 💪💪 [[Protenix-v2 Technical Report](docs/PX2.pdf)]
   - Protenix-v2 shows clear gains on antibody-antigen structture prediction, together with an additional update in ligand-related plausibility.  The model weights of Protenix-v2 are proprietary and confidential information of the rights holder, are not released under any open-source license, and may not be reproduced, distributed, sublicensed, disclosed, or otherwise transferred to any third party in any form without the express prior written consent of the rights holder.
@@ -220,3 +235,7 @@ The Protenix project including both code and model parameters is released under 
 ## Contact Us
 
 We welcome inquiries and collaboration opportunities for advanced applications of our model, such as developing new features, fine-tuning for specific use cases, and more. Please feel free to contact us at anewbt_mind@bytedance.com.
+
+## S5000 inference optimizations
+
+See [S5000 setup and benchmark guide](optimizations/s5000/README.md) for the current MUSA inference implementation and warm-excluded evaluation.

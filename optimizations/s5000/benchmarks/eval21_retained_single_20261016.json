@@ -1,0 +1,101 @@
+{
+  "protocol": {
+    "pdb_count": 21,
+    "samples": 5,
+    "cycles": 10,
+    "steps": 200,
+    "seed": 101,
+    "warm_per_pdb": 1,
+    "formal_rounds": 1,
+    "cache": true,
+    "use_msa": true
+  },
+  "measurement": "Job loop minus warm iteration windows; same-GPU all-off baseline",
+  "version": "Historical original14 single-enable experiments, before pruning",
+  "retained_single_results": [
+    {
+      "id": 1,
+      "baseline_job_seconds": 1223.0868964370711,
+      "job_seconds": 793.1304911969974,
+      "throughput_gain_percent": 54.21004614148435,
+      "historical_experiment_id": 1
+    },
+    {
+      "id": 2,
+      "baseline_job_seconds": 1223.0868964370711,
+      "job_seconds": 1145.0556627021542,
+      "throughput_gain_percent": 6.814623627184657,
+      "historical_experiment_id": 2
+    },
+    {
+      "id": 3,
+      "baseline_job_seconds": 1235.8157147391885,
+      "job_seconds": 1227.2227110564895,
+      "throughput_gain_percent": 0.7001992063283557,
+      "historical_experiment_id": 3
+    },
+    {
+      "id": 4,
+      "baseline_job_seconds": 1235.8157147391885,
+      "job_seconds": 1185.987853230983,
+      "throughput_gain_percent": 4.201380424973111,
+      "historical_experiment_id": 4
+    },
+    {
+      "id": 5,
+      "baseline_job_seconds": 1236.297143781539,
+      "job_seconds": 1214.7954103138854,
+      "throughput_gain_percent": 1.769988039557857,
+      "historical_experiment_id": 5
+    },
+    {
+      "id": 6,
+      "baseline_job_seconds": 1240.3456752168759,
+      "job_seconds": 1227.0609019399808,
+      "throughput_gain_percent": 1.0826498714034294,
+      "historical_experiment_id": 7
+    },
+    {
+      "id": 7,
+      "baseline_job_seconds": 1240.3456752168759,
+      "job_seconds": 1147.4749575185215,
+      "throughput_gain_percent": 8.093485360167897,
+      "historical_experiment_id": 8
+    },
+    {
+      "id": 8,
+      "baseline_job_seconds": 1238.1606814601087,
+      "job_seconds": 1186.582647524122,
+      "throughput_gain_percent": 4.34677129685046,
+      "historical_experiment_id": 9
+    },
+    {
+      "id": 9,
+      "baseline_job_seconds": 1224.1661938533744,
+      "job_seconds": 1216.1271654592456,
+      "throughput_gain_percent": 0.661035179745606,
+      "historical_experiment_id": 11
+    },
+    {
+      "id": 10,
+      "baseline_job_seconds": 1224.1661938533744,
+      "job_seconds": 1215.9110915079527,
+      "throughput_gain_percent": 0.678923187976177,
+      "historical_experiment_id": 12
+    },
+    {
+      "id": 11,
+      "baseline_job_seconds": 1225.5294419542515,
+      "job_seconds": 1203.5587876029313,
+      "throughput_gain_percent": 1.8254741336796831,
+      "historical_experiment_id": 14
+    }
+  ],
+  "current_pruned_combination_retested": false,
+  "removed_historical_experiment_ids": [
+    6,
+    10,
+    13
+  ],
+  "numbering": "id is current contiguous01-15; historical_experiment_id preserves source experiment provenance"
+}

@@ -539,6 +539,15 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
         runner (InferenceRunner): The initialized runner instance.
         configs (Any): Inference configurations.
     """
+    # Optional benchmark accounting; ordinary inference needs no wrapper installation.
+    from pathlib import Path
+    from protenix.model.musa_kernels.runtime import COUNTS, STATS
+    timing_dir = Path(os.environ["S5000_RUN_DIR"]) if os.getenv("S5000_RUN_DIR") else None
+    rows = []
+    infer_start = time.perf_counter()
+    if timing_dir:
+        timing_dir.mkdir(parents=True, exist_ok=True)
+
     # Data loading
     logger.info(f"Loading data from {configs.input_json_path}")
     with open(configs.input_json_path, "r", encoding="utf-8") as f:
@@ -573,7 +582,14 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
     for seed in seeds:
         seed_everything(seed=seed, deterministic=configs.deterministic)
         t1_start = time.time()
-        for batch in dataloader:
+        iterator = iter(dataloader)
+        while True:
+            iteration_start = time.perf_counter()
+            try:
+                batch = next(iterator)
+            except StopIteration:
+                break
+            counts_before = dict(COUNTS)
             sample_name = "unknown"
             try:
                 t2_start = time.time()
@@ -641,6 +657,15 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                 ) as f:
                     f.write(error_message)
                 accelerator_empty_cache()
+            finally:
+                if timing_dir:
+                    torch.musa.synchronize()
+                    shape = {k: int(data[k].item()) for k in ("N_asym", "N_token", "N_atom", "N_msa")}
+                    rows.append(dict(name=sample_name, warm=sample_name.endswith("_warm"),
+                        iteration_wall_seconds=time.perf_counter()-iteration_start,
+                        shape=shape, data_error=data_error_message,
+                        counts={k: COUNTS[k]-counts_before.get(k, 0) for k in COUNTS}))
+                    (timing_dir / "iteration_timings.json").write_text(json.dumps(rows, indent=2))
         t1_end = time.time()
         logger.info(
             f"[Rank {DIST_WRAPPER.rank}] Seed {seed} completed in {t1_end - t1_start:.2f}s."
@@ -657,6 +682,18 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
     logger.info(
         f"[Rank {DIST_WRAPPER.rank}] Job completed in {t0_end - t0_start:.2f}s."
     )
+
+    if timing_dir:
+        elapsed = time.perf_counter() - infer_start
+        warm = sum(r["iteration_wall_seconds"] for r in rows if r["warm"])
+        formal = sum(r["iteration_wall_seconds"] for r in rows if not r["warm"])
+        (timing_dir / "wall_timing.json").write_text(json.dumps(dict(
+            infer_function_wall_seconds=elapsed, warm_iteration_seconds=warm,
+            formal_iteration_seconds=formal, wall_excluding_warm_seconds=elapsed-warm,
+            formal_count=sum(not r["warm"] for r in rows), warm_count=sum(r["warm"] for r in rows)), indent=2))
+        stats = dict(STATS)
+        stats.update(counts=dict(COUNTS), implementation="direct_model_source")
+        (timing_dir / "optimization_stats.json").write_text(json.dumps(stats, indent=2))
 
 
 def main(configs: Any) -> None:

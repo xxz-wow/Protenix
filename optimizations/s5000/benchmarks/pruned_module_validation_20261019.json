@@ -1,0 +1,103 @@
+{
+  "device": "MTT S5000",
+  "physical_gpu": 6,
+  "checks": [
+    {
+      "name": "ct_bf16_pruned_adaln",
+      "shape": [
+        2,
+        32,
+        768
+      ],
+      "dtype": "torch.float32",
+      "finite": true
+    },
+    {
+      "name": "removed_adaln_separate_projection_formula",
+      "exact": true
+    },
+    {
+      "name": "ct_cpu_fallback",
+      "shape": [
+        2,
+        32,
+        768
+      ],
+      "dtype": "torch.float32",
+      "finite": true
+    },
+    {
+      "name": "ct_training_fallback",
+      "shape": [
+        2,
+        32,
+        768
+      ],
+      "dtype": "torch.float32",
+      "finite": true
+    },
+    {
+      "name": "attention_400_bf16",
+      "shape": [
+        2,
+        400,
+        768
+      ],
+      "dtype": "torch.float32",
+      "finite": true
+    },
+    {
+      "name": "attention_short_fallback",
+      "shape": [
+        2,
+        32,
+        768
+      ],
+      "dtype": "torch.float32",
+      "finite": true
+    },
+    {
+      "name": "pair_bias_bf16_cached",
+      "shape": [
+        2,
+        16,
+        768
+      ],
+      "dtype": "torch.float32",
+      "finite": true
+    },
+    {
+      "name": "restored_local_chunk_path",
+      "shape": [
+        2,
+        2,
+        64,
+        32
+      ],
+      "dtype": "torch.float32",
+      "finite": true
+    },
+    {
+      "name": "tile_328",
+      "exact": true
+    },
+    {
+      "name": "tile_851",
+      "exact": true
+    },
+    {
+      "name": "tile_964",
+      "exact": true
+    }
+  ],
+  "accuracy_equivalence_claimed": false,
+  "full_eval21_retested": false,
+  "source_sha256": {
+    "protenix/model/modules/primitives.py": "2dd8030a72e3775bc3619da6a69cc3556e9dd99eea3022e6bd9b308417ee67f6",
+    "protenix/model/modules/transformer.py": "30685704cf20122df39dc2dcd0755ba923b2da130fd60b815a56b7edab80deca",
+    "protenix/model/musa_kernels/triangle_fusion.py": "ca93d16b7851b6fc715a8d3f90348bc19ab4d45c4889519e5ad811037525d443",
+    "protenix/model/triangular/triangular.py": "18472ae537cd483801844cfbd6982673367a124a74ccf2d9dc3d552191c0dfb8"
+  },
+  "date": "2026-10-19",
+  "validation_only": true
+}

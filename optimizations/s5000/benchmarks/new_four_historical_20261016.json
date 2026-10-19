@@ -1,0 +1,45 @@
+{
+  "protocol": {
+    "pdb_count": 21,
+    "samples": 5,
+    "cycles": 10,
+    "steps": 200,
+    "seed": 101,
+    "warm_per_pdb": 1,
+    "formal_rounds": 1
+  },
+  "measurement": "Job loop minus warm iteration windows; model loading excluded",
+  "version": "Historical original14 plus new candidates, before removing06/10/13",
+  "baseline_job_seconds": 496.59635929582646,
+  "single_results": [
+    {
+      "id": 12,
+      "job_seconds": 447.14374477284025,
+      "throughput_gain_percent": 11.05966819419766,
+      "historical_experiment_id": 15
+    },
+    {
+      "id": 13,
+      "job_seconds": 451.0280325761437,
+      "throughput_gain_percent": 10.103213864426452,
+      "historical_experiment_id": 16
+    },
+    {
+      "id": 14,
+      "job_seconds": 489.3869545011222,
+      "throughput_gain_percent": 1.4731501786870327,
+      "historical_experiment_id": 17
+    },
+    {
+      "id": 15,
+      "job_seconds": 490.4217875548825,
+      "throughput_gain_percent": 1.2590329177112558,
+      "historical_experiment_id": 18
+    }
+  ],
+  "historical_combination_job_seconds": 419.73717321572826,
+  "historical_combination_throughput_gain_percent": 18.31126499739293,
+  "current_pruned_combination_retested": false,
+  "accuracy_equivalence_claimed": false,
+  "numbering": "id is current contiguous01-15; historical_experiment_id preserves source experiment provenance"
+}

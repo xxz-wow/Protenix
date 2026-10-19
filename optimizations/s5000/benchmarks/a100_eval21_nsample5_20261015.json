@@ -1,0 +1,232 @@
+{
+  "config": {
+    "model": "protenix_base_default_v0.5.0",
+    "cycles": 10,
+    "steps": 200,
+    "samples": 5,
+    "seed": 101,
+    "cache": true,
+    "efficient_fusion": true,
+    "tf32": true,
+    "use_msa": true,
+    "torch": "2.7.1+cu126",
+    "cuda": "12.6",
+    "gpu": "NVIDIA A100-SXM4-80GB"
+  },
+  "formal_log_seconds": 421.24,
+  "formal_inputs": 21,
+  "formal_structures": 105,
+  "cases": [
+    {
+      "pdb_id": "8a06",
+      "shape": {
+        "N_asym": 1,
+        "N_token": 147,
+        "N_atom": 1186,
+        "N_msa": 15
+      },
+      "log_seconds": 10.47
+    },
+    {
+      "pdb_id": "7pl7",
+      "shape": {
+        "N_asym": 1,
+        "N_token": 165,
+        "N_atom": 1362,
+        "N_msa": 3570
+      },
+      "log_seconds": 10.65
+    },
+    {
+      "pdb_id": "7pge",
+      "shape": {
+        "N_asym": 4,
+        "N_token": 255,
+        "N_atom": 1768,
+        "N_msa": 5324
+      },
+      "log_seconds": 11.47
+    },
+    {
+      "pdb_id": "7u5o",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 226,
+        "N_atom": 1759,
+        "N_msa": 6084
+      },
+      "log_seconds": 11.13
+    },
+    {
+      "pdb_id": "7nqe",
+      "shape": {
+        "N_asym": 4,
+        "N_token": 255,
+        "N_atom": 1885,
+        "N_msa": 6069
+      },
+      "log_seconds": 11.19
+    },
+    {
+      "pdb_id": "8a3p",
+      "shape": {
+        "N_asym": 1,
+        "N_token": 220,
+        "N_atom": 1634,
+        "N_msa": 2424
+      },
+      "log_seconds": 10.9
+    },
+    {
+      "pdb_id": "7n5v",
+      "shape": {
+        "N_asym": 5,
+        "N_token": 177,
+        "N_atom": 1820,
+        "N_msa": 15397
+      },
+      "log_seconds": 11.55
+    },
+    {
+      "pdb_id": "7v5v",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 416,
+        "N_atom": 3178,
+        "N_msa": 7655
+      },
+      "log_seconds": 14.47
+    },
+    {
+      "pdb_id": "7uda",
+      "shape": {
+        "N_asym": 5,
+        "N_token": 466,
+        "N_atom": 3462,
+        "N_msa": 14027
+      },
+      "log_seconds": 19.83
+    },
+    {
+      "pdb_id": "7bb9",
+      "shape": {
+        "N_asym": 5,
+        "N_token": 414,
+        "N_atom": 3331,
+        "N_msa": 1750
+      },
+      "log_seconds": 15.22
+    },
+    {
+      "pdb_id": "7uxr",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 354,
+        "N_atom": 2814,
+        "N_msa": 10888
+      },
+      "log_seconds": 14.21
+    },
+    {
+      "pdb_id": "7r2e",
+      "shape": {
+        "N_asym": 3,
+        "N_token": 425,
+        "N_atom": 3443,
+        "N_msa": 8556
+      },
+      "log_seconds": 16.45
+    },
+    {
+      "pdb_id": "7r0o",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 361,
+        "N_atom": 3025,
+        "N_msa": 8185
+      },
+      "log_seconds": 14.21
+    },
+    {
+      "pdb_id": "7wxp",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 392,
+        "N_atom": 2877,
+        "N_msa": 1700
+      },
+      "log_seconds": 13.86
+    },
+    {
+      "pdb_id": "8a59",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 478,
+        "N_atom": 3582,
+        "N_msa": 2800
+      },
+      "log_seconds": 18.44
+    },
+    {
+      "pdb_id": "7uvc",
+      "shape": {
+        "N_asym": 3,
+        "N_token": 574,
+        "N_atom": 4688,
+        "N_msa": 12948
+      },
+      "log_seconds": 26.35
+    },
+    {
+      "pdb_id": "7rev",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 851,
+        "N_atom": 6629,
+        "N_msa": 6907
+      },
+      "log_seconds": 52.17
+    },
+    {
+      "pdb_id": "7unz",
+      "shape": {
+        "N_asym": 8,
+        "N_token": 531,
+        "N_atom": 3332,
+        "N_msa": 11363
+      },
+      "log_seconds": 23.61
+    },
+    {
+      "pdb_id": "8ako",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 546,
+        "N_atom": 4160,
+        "N_msa": 493
+      },
+      "log_seconds": 22.38
+    },
+    {
+      "pdb_id": "7oat",
+      "shape": {
+        "N_asym": 6,
+        "N_token": 964,
+        "N_atom": 7104,
+        "N_msa": 16384
+      },
+      "log_seconds": 70.13
+    },
+    {
+      "pdb_id": "8ech",
+      "shape": {
+        "N_asym": 2,
+        "N_token": 532,
+        "N_atom": 4064,
+        "N_msa": 6062
+      },
+      "log_seconds": 22.55
+    }
+  ],
+  "timing": "Only sum the 21 formal Model forward time records after one warm entry per PDB. Each entry generates 5 structures with seed101. Includes prediction, postprocess and output; excludes warm, initialization/loading and per-input feature preparation outside iteration body. Not pure GPU forward and not full Job completed."
+}

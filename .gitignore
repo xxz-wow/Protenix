@@ -139,3 +139,9 @@ release_data/
 debug/
 .trae/
 docs/architecture
+
+# S5000 local benchmark inputs, outputs and native build products
+outputs/
+protenix/model/tri_attention/TriAttentionCache/
+optimizations/s5000/native_build.json
+protenix/model/tri_attention/v21/compiler_diagnostics/

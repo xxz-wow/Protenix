@@ -1,0 +1,22 @@
+{
+  "core_source_matches_tested": true,
+  "syntax_passed": true,
+  "unittest_exit_code": 0,
+  "tests_output": "test_missing_start_is_rejected (test_formal_timing.FormalFlowTest) ... ok\ntest_missing_success_is_rejected (test_formal_timing.FormalFlowTest) ... ok\ntest_warm_and_post_success_cleanup_are_excluded (test_formal_timing.FormalFlowTest) ... ok\ntest_duplicate_names_and_invalid_order_are_rejected (test_launch.WarmProtocolTest) ... ok\ntest_formal_inputs_expand_without_mutation (test_launch.WarmProtocolTest) ... ok\ntest_mismatched_warm_biology_is_rejected (test_launch.WarmProtocolTest) ... ok\ntest_paired_inputs_do_not_gain_extra_warm_round (test_launch.WarmProtocolTest) ... ok\ntest_unsafe_names_are_rejected (test_launch.WarmProtocolTest) ... ok\ntest_bias_edit_and_different_tensor_do_not_reuse_true (test_mask_cache.MaskCacheTest) ... ok\ntest_inference_tensor_without_version_is_not_cached (test_mask_cache.MaskCacheTest) ... ok\ntest_inplace_edit_invalidates_cached_result (test_mask_cache.MaskCacheTest) ... ok\ntest_none_and_mask_with_a_zero (test_mask_cache.MaskCacheTest) ... ok\ntest_cache_is_an_explicit_argument (test_source_integration.DirectSourceTest) ... ok\ntest_launcher_needs_no_adapter_search_path (test_source_integration.DirectSourceTest) ... ok\ntest_model_and_entry_do_not_rebind_functions (test_source_integration.DirectSourceTest) ... ok\n\n----------------------------------------------------------------------\nRan 15 tests in 0.201s\n\nOK\n",
+  "timing_recomputed": [
+    {
+      "run": "eval21_retained15_ns5_20261019",
+      "formal_full_flow_seconds": 429.346
+    },
+    {
+      "run": "eval21_retained15_maskcache_ns5_20261019",
+      "formal_full_flow_seconds": 420.16
+    },
+    {
+      "run": "eval21_restored_maskcache_ns5_20261019",
+      "formal_full_flow_seconds": 409.691
+    }
+  ],
+  "full_structural_accuracy_equivalence_validated": false,
+  "checks_scope": "CPU unit tests and existing complete GPU inference; no new full benchmark"
+}
