@@ -1,6 +1,8 @@
 """Independent MUSA gated-projection/layout fusion for triangle multiplication.
 Preserves BF16 sigmoid/multiply rounding; no CUDA/cuequivariance source copied.
 """
+import os
+from protenix.model.musa_kernels.runtime import STATS
 import torch
 import torch.nn.functional as F
 import triton
@@ -58,7 +60,23 @@ class GatedLayout(torch.autograd.Function):
         shape=(*p.shape[:-3],c,n,n)
         a,b=[torch.empty(shape,device=p.device,dtype=p.dtype) for _ in range(2)]
         r=p.numel()//(4*c)
-        gates_fwd[(triton.cdiv(r,32),triton.cdiv(c,32))](p,a,b,r,n*n,c,32,32,num_warps=4,num_stages=1)
+        br, bc, warps, stages = 32, 32, 4, 1
+        if (not torch.is_grad_enabled() and n >= 328 and c == 128
+                and os.getenv("PROTENIX_ENABLE_MUSA_TRIMUL_TILE_V2") == "1"):
+            if n < 450:
+                br, bc = 32, 64
+            elif 500 <= n < 640 and n % 4 == 0:
+                br, bc = 32, 128
+            elif n % 2 == 0 and n < 640:
+                br, bc = 128, 64
+                stages = 1 if n < 500 else 2
+            elif n < 900:
+                br, bc = 64, 64
+            else:
+                br, bc = 32, 128
+            warps = 8
+            STATS["trimul_tile_v2_calls"] += 1
+        gates_fwd[(triton.cdiv(r,br),triton.cdiv(c,bc))](p,a,b,r,n*n,c,br,bc,num_warps=warps,num_stages=stages)
         ctx.save_for_backward(p)
         return a,b
     @staticmethod
@@ -127,4 +145,3 @@ class OutputGate(torch.autograd.Function):
         dx,dg = torch.empty_like(x),torch.empty_like(g)
         output_backward[(triton.cdiv(x.numel(),1024),)](x,g,dy.contiguous(),dx,dg,x.numel(),1024,num_warps=4)
         return dx,dg
-
