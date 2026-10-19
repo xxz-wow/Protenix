@@ -123,6 +123,13 @@ class ConfidenceHead(nn.Module):
         self.plddt_ln = LayerNorm(self.c_s)
         self.resolved_ln = LayerNorm(self.c_s)
 
+        # Roles select native branches in the original forward methods.
+        excluded = {"input_strunk_ln", "pae_ln", "pde_ln", "plddt_ln", "resolved_ln"}
+        for name, module in self.named_modules():
+            module._musa_confidence = True
+            if name.split(".")[-1] in excluded:
+                module._musa_skip_fast_ln = True
+
         with torch.no_grad():
             # Zero init for output layer (before softmax) to zero
             nn.init.zeros_(self.linear_no_bias_pae.weight)
