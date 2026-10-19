@@ -126,6 +126,32 @@ class AdaptiveLayerNorm(nn.Module):
         self.linear_nobias_s = LinearNoBias(
             in_features=c_s, out_features=c_a, initializer="zeros"
         )
+        self._projection_weight = None
+        self._projection_bias = None
+        self._projection_key = None
+
+    @torch.no_grad()
+    def _get_projection_parameters(self) -> tuple[torch.Tensor, torch.Tensor]:
+        scale_weight = self.linear_s.weight
+        scale_bias = self.linear_s.bias
+        shift_weight = self.linear_nobias_s.weight
+        key = (
+            scale_weight.data_ptr(),
+            scale_weight._version,
+            scale_bias.data_ptr(),
+            scale_bias._version,
+            shift_weight.data_ptr(),
+            shift_weight._version,
+            scale_weight.device,
+            scale_weight.dtype,
+        )
+        if self._projection_weight is None or self._projection_key != key:
+            self._projection_weight = torch.cat((scale_weight, shift_weight), dim=0)
+            self._projection_bias = torch.cat(
+                (scale_bias, torch.zeros_like(scale_bias)), dim=0
+            )
+            self._projection_key = key
+        return self._projection_weight, self._projection_bias
 
     def forward(
         self,
@@ -159,8 +185,19 @@ class AdaptiveLayerNorm(nn.Module):
             scale, shift = conditioning
             return torch.sigmoid(scale) * a + shift
         s = self.layernorm_s(s)
-        scale = self.linear_s(s)
-        shift = self.linear_nobias_s(s)
+        use_musa_projection = (
+            not self.training
+            and self.c_a >= 512
+            and s.device.type == "musa"
+            and os.getenv("PROTENIX_DISABLE_MUSA_ADAPTIVE_LAYERNORM_FUSION") != "1"
+        )
+        if use_musa_projection:
+            _quick_counts["adaln"] += 1
+            weight, bias = self._get_projection_parameters()
+            scale, shift = F.linear(s, weight, bias).chunk(2, dim=-1)
+        else:
+            scale = self.linear_s(s)
+            shift = self.linear_nobias_s(s)
         if shared_sample:
             scale = scale.expand(a.shape)
             shift = shift.expand(a.shape)
