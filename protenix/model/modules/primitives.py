@@ -568,6 +568,7 @@ def _local_attention(
     use_efficient_implementation: bool = True,
     inplace_safe: bool = False,
     chunk_size: Optional[int] = None,
+    profile_times: Optional[list[tuple[str, float]]] = None,
 ) -> torch.Tensor:
     """Local attention
 
@@ -591,6 +592,17 @@ def _local_attention(
             [..., Q, d]
     """
     assert q.shape == k.shape == v.shape  # local attention doesn't make sense if Q != K
+    if profile_times is not None:
+        torch.musa.synchronize()
+        profile_start = time.perf_counter()
+
+    def profile_mark(name: str) -> None:
+        nonlocal profile_start
+        if profile_times is not None:
+            torch.musa.synchronize()
+            now = time.perf_counter()
+            profile_times.append((name, (now - profile_start) * 1000))
+            profile_start = now
 
     # Prepare for attention qkv, q: [..., n_trunks, n_queries, d], kv: [..., n_trunks, n_keys, d]
 
@@ -613,11 +625,13 @@ def _local_attention(
         attn_bias=attn_bias,
         inf=inf,
     )
+    profile_mark("local_rearrange")
 
     # Apply attention
     # [..., n_trunks, n_queries, d]
     if trunked_attn_bias is not None:
         attn_bias_trunked = attn_bias_trunked + trunked_attn_bias
+    profile_mark("local_bias_add")
 
     if chunk_size is not None:
         attn_inputs = {
@@ -646,12 +660,14 @@ def _local_attention(
             use_efficient_implementation=use_efficient_implementation,
             inplace_safe=inplace_safe,
         )
+    profile_mark("local_sdpa")
 
     # Revert back to orignal shape and remove q_pad_length
     # [..., n_trunks, n_queries, d] ->  [..., n_trunks * n_queries, d] ->  [..., n, d]
     out = out.reshape(*out.shape[:-3], -1, out.shape[-1])
     if q_pad_length > 0:
         out = out[..., :-q_pad_length, :]
+    profile_mark("local_output_reshape")
     return out
 
 
@@ -764,6 +780,41 @@ class Attention(nn.Module):
             # zero init the output layer
             nn.init.zeros_(self.linear_o.weight)
 
+        self._qkvg_weight = None
+        self._qkvg_bias = None
+        self._qkvg_key = None
+
+    @torch.no_grad()
+    def _get_qkvg_parameters(self) -> tuple[torch.Tensor, torch.Tensor]:
+        q_weight = self.linear_q.weight
+        k_weight = self.linear_k.weight
+        v_weight = self.linear_v.weight
+        g_weight = self.linear_g.weight
+        q_bias = self.linear_q.bias
+        key = (
+            q_weight.data_ptr(),
+            q_weight._version,
+            k_weight.data_ptr(),
+            k_weight._version,
+            v_weight.data_ptr(),
+            v_weight._version,
+            g_weight.data_ptr(),
+            g_weight._version,
+            q_bias.data_ptr(),
+            q_bias._version,
+            q_weight.device,
+            q_weight.dtype,
+        )
+        if self._qkvg_weight is None or self._qkvg_key != key:
+            self._qkvg_weight = torch.cat(
+                (q_weight, k_weight, v_weight, g_weight), dim=0
+            )
+            self._qkvg_bias = torch.cat(
+                (q_bias, torch.zeros_like(q_bias).repeat(3)), dim=0
+            )
+            self._qkvg_key = key
+        return self._qkvg_weight, self._qkvg_bias
+
     def _prep_qkv(
         self, q_x: torch.Tensor, kv_x: torch.Tensor, apply_scale: bool = True
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -801,7 +852,12 @@ class Attention(nn.Module):
 
         return q, k, v
 
-    def _wrap_up(self, o: torch.Tensor, q_x: torch.Tensor) -> torch.Tensor:
+    def _wrap_up(
+        self,
+        o: torch.Tensor,
+        q_x: torch.Tensor,
+        gate: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         """
 
         Args:
@@ -814,7 +870,9 @@ class Attention(nn.Module):
             torch.Tensor: the output of attention
         """
         if self.linear_g is not None:
-            g = self.sigmoid(self.linear_g(q_x))
+            if gate is None:
+                gate = self.linear_g(q_x)
+            g = self.sigmoid(gate)
 
             # [*, G/Q, H, C_hidden]
             g = g.view(g.shape[:-1] + (self.num_heads, -1))
@@ -859,7 +917,57 @@ class Attention(nn.Module):
                 [*, Q, C_q]
         """
 
-        q, k, v = self._prep_qkv(q_x=q_x, kv_x=kv_x, apply_scale=True)
+        profile = getattr(self, "_profile_local_attention", False)
+        profile_times = [] if profile else None
+        use_musa_qkvg = (
+            not profile
+            and not self.training
+            and q_x is kv_x
+            and q_x.device.type == "musa"
+            and self.linear_g is not None
+            and self.linear_q.bias is not None
+            and self.c_q >= 512
+            and self.c_q == self.c_k == self.c_v
+            and os.getenv("PROTENIX_DISABLE_MUSA_ATTENTION_QKVG_FUSION") != "1"
+        )
+        gate = None
+        if profile:
+            torch.musa.synchronize()
+            profile_start = time.perf_counter()
+
+            def profile_mark(name: str) -> None:
+                nonlocal profile_start
+                torch.musa.synchronize()
+                now = time.perf_counter()
+                profile_times.append((name, (now - profile_start) * 1000))
+                profile_start = now
+
+            q = self.linear_q(q_x)
+            profile_mark("q_projection")
+            k = self.linear_k(kv_x)
+            profile_mark("k_projection")
+            v = self.linear_v(kv_x)
+            profile_mark("v_projection")
+            q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+            k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+            v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+            q = q / math.sqrt(self.c_hidden)
+            profile_mark("qkv_layout_and_scale")
+        elif use_musa_qkvg:
+            _quick_counts["qkvg"] += 1
+            weight, bias = self._get_qkvg_parameters()
+            projections = F.linear(q_x, weight, bias)
+            projection_width = self.c_hidden * self.num_heads
+            qkv, gate = projections.split(
+                (projection_width * 3, projection_width), dim=-1
+            )
+            q, k, v = qkv.split(projection_width, dim=-1)
+            q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+            k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+            v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+            q = q / math.sqrt(self.c_hidden)
+        else:
+            q, k, v = self._prep_qkv(q_x=q_x, kv_x=kv_x, apply_scale=True)
 
         if attn_bias is not None:
             if len(attn_bias.shape) != len(q.shape):
@@ -908,6 +1016,7 @@ class Attention(nn.Module):
                     use_efficient_implementation=self.use_efficient_implementation,
                     inplace_safe=inplace_safe,
                     chunk_size=chunk_size,
+                    profile_times=profile_times,
                 )
             else:
                 raise ValueError(
@@ -923,7 +1032,21 @@ class Attention(nn.Module):
                 inplace_safe=inplace_safe,
             )  # [*, H, Q, C_hidden]
         o = o.transpose(-2, -3)  # o: [*, Q, H, C_hidden]
-        o = self._wrap_up(o, q_x)  # q_x: [*, Q, c_q]
+        if profile:
+            torch.musa.synchronize()
+            profile_start = time.perf_counter()
+            if self.linear_g is not None:
+                g = self.sigmoid(self.linear_g(q_x))
+                g = g.view(g.shape[:-1] + (self.num_heads, -1))
+                profile_mark("output_gate_projection")
+                o = o * g
+                profile_mark("output_gate_multiply")
+            o = flatten_final_dims(o, num_dims=2)
+            o = self.linear_o(o)
+            profile_mark("output_projection")
+            self._last_local_profile = profile_times
+        else:
+            o = self._wrap_up(o, q_x, gate=gate)  # q_x: [*, Q, c_q]
 
         return o
 
