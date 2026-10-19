@@ -258,18 +258,55 @@ def _attention(
     """
     assert k.shape == v.shape
 
-    # Upcast to compute attn_weights
     input_dtype = q.dtype
+    use_musa_bf16_sdpa = (
+        use_efficient_implementation
+        and q.device.type == "musa"
+        and input_dtype == torch.bfloat16
+        and q.ndim <= 4
+        and os.getenv("PROTENIX_DISABLE_MUSA_BF16_SDPA") != "1"
+    )
+    if use_musa_bf16_sdpa:
+        _quick_counts["std_bf16"] += 1
+        if attn_bias is not None:
+            attn_bias = attn_bias.to(dtype=input_dtype)
+        return F.scaled_dot_product_attention(
+            query=q,
+            key=k,
+            value=v,
+            attn_mask=attn_bias,
+            scale=1.0,
+        )
+
+    use_musa_fp32_via_bf16_sdpa = (
+        use_efficient_implementation
+        and q.device.type == "musa"
+        and input_dtype == torch.float32
+        and q.ndim <= 4
+        and os.getenv("PROTENIX_DISABLE_MUSA_FP32_SDPA_BF16") != "1"
+    )
+    if use_musa_fp32_via_bf16_sdpa:
+        _quick_counts["std_fp32_to_bf16"] += 1
+        bf16_attn_bias = (
+            attn_bias.to(dtype=torch.bfloat16) if attn_bias is not None else None
+        )
+        return F.scaled_dot_product_attention(
+            query=q.to(dtype=torch.bfloat16),
+            key=k.to(dtype=torch.bfloat16),
+            value=v.to(dtype=torch.bfloat16),
+            attn_mask=bf16_attn_bias,
+            scale=1.0,
+        ).to(dtype=input_dtype)
+
+    # Preserve the original MUSA math fallback outside the supported SDPA shapes.
+    if q.device.type == "musa":
+        use_efficient_implementation = False
+
+    # Upcast to compute attn_weights
     q = q.to(dtype=torch.float32)
     k = k.to(dtype=torch.float32)
     if attn_bias is not None:
         attn_bias = attn_bias.to(dtype=torch.float32)
-
-    # The current MUSA SDPA accepts only 3D/4D QKV and does not support
-    # attn_mask gradients. Use the equivalent matmul/softmax path so both
-    # inference and training retain the complete attention gradient.
-    if q.device.type == "musa":
-        use_efficient_implementation = False
 
     if use_efficient_implementation:
         attn_output = F.scaled_dot_product_attention(
