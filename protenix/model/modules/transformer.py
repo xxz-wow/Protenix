@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from contextlib import nullcontext
+import os
 from functools import partial
 from typing import Callable, Optional, Union
 
@@ -607,11 +609,23 @@ class ConditionedTransitionBlock(nn.Module):
             torch.Tensor: the updated a from ConditionedTransitionBlock
                 [..., N, c_a]
         """
-        a = self.adaln(a, s)
-        b = F.silu((self.linear_nobias_a1(a))) * self.linear_nobias_a2(a)
-        # Output projection (from adaLN-Zero [27])
-        a = torch.sigmoid(self.linear_s(s)) * self.linear_nobias_b(b)
-        return a
+        input_dtype = a.dtype
+        use_local_bf16 = (
+            not self.training and not torch.is_grad_enabled()
+            and a.device.type == "musa"
+            and self.c_a == 768 and self.c_s == 384
+            and a.ndim >= 3 and a.shape[-3] > 1
+            and os.getenv("PROTENIX_ENABLE_MUSA_CT_LOCAL_BF16") == "1"
+        )
+        if use_local_bf16:
+            STATS["ct_local_bf16_calls"] += 1
+        with (torch.autocast("musa", dtype=torch.bfloat16)
+              if use_local_bf16 else nullcontext()):
+            a = self.adaln(a, s)
+            b = F.silu((self.linear_nobias_a1(a))) * self.linear_nobias_a2(a)
+            # Output projection (from adaLN-Zero [27])
+            a = torch.sigmoid(self.linear_s(s)) * self.linear_nobias_b(b)
+        return a.to(dtype=input_dtype) if use_local_bf16 else a
 
 
 class AtomAttentionEncoder(nn.Module):
