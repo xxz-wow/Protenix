@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from contextlib import nullcontext
 import math
 import os
 import time
@@ -118,6 +119,7 @@ class AdaptiveLayerNorm(nn.Module):
 
     def __init__(self, c_a: int = 768, c_s: int = 384) -> None:
         super(AdaptiveLayerNorm, self).__init__()
+        self.c_a = c_a
         self.layernorm_a = LayerNorm(c_a, create_scale=False, create_offset=False)
         self.layernorm_s = LayerNorm(c_s, create_offset=False)
         self.linear_s = Linear(in_features=c_s, out_features=c_a, initializer="zeros")
@@ -125,7 +127,12 @@ class AdaptiveLayerNorm(nn.Module):
             in_features=c_s, out_features=c_a, initializer="zeros"
         )
 
-    def forward(self, a: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        a: torch.Tensor,
+        s: torch.Tensor,
+        conditioning: Optional[tuple[torch.Tensor, torch.Tensor]] = None,
+    ) -> torch.Tensor:
         """
         Args:
             a (torch.Tensor): the single feature aggregate per-atom representation
@@ -137,9 +144,27 @@ class AdaptiveLayerNorm(nn.Module):
             torch.Tensor: the updated a from AdaLN
                 [..., N_token, c_a]
         """
+        shared_sample = (
+            not self.training
+            and s.device.type == "musa"
+            and s.ndim >= 3
+            and s.shape[-3] > 1
+            and s.stride(-3) == 0
+            and os.getenv("PROTENIX_DISABLE_SHARED_SAMPLE_CONDITIONING", "1") != "1"
+        )
+        if shared_sample:
+            s = s.narrow(-3, 0, 1)
         a = self.layernorm_a(a)
+        if conditioning is not None:
+            scale, shift = conditioning
+            return torch.sigmoid(scale) * a + shift
         s = self.layernorm_s(s)
-        a = torch.sigmoid(self.linear_s(s)) * a + self.linear_nobias_s(s)
+        scale = self.linear_s(s)
+        shift = self.linear_nobias_s(s)
+        if shared_sample:
+            scale = scale.expand(a.shape)
+            shift = shift.expand(a.shape)
+        a = torch.sigmoid(scale) * a + shift
         return a
 
 
@@ -958,138 +983,152 @@ class Attention(nn.Module):
                 [*, Q, C_q]
         """
 
-        profile = getattr(self, "_profile_local_attention", False)
-        profile_times = [] if profile else None
-        use_musa_qkvg = (
-            not profile
-            and not self.training
-            and q_x is kv_x
-            and q_x.device.type == "musa"
-            and self.linear_g is not None
-            and self.linear_q.bias is not None
-            and self.c_q >= 512
-            and self.c_q == self.c_k == self.c_v
-            and os.getenv("PROTENIX_DISABLE_MUSA_ATTENTION_QKVG_FUSION") != "1"
+        input_dtype = q_x.dtype
+        use_local_bf16 = (
+            not self.training and not torch.is_grad_enabled()
+            and q_x is kv_x and q_x.device.type == "musa"
+            and q_x.dtype == torch.float32 and q_x.ndim == 3
+            and q_x.shape[0] > 1 and q_x.shape[1] >= 400
+            and self.c_q == self.c_k == self.c_v == 768
+            and attn_bias is not None and trunked_attn_bias is None
+            and n_queries is None and n_keys is None
+            and os.getenv("PROTENIX_ENABLE_MUSA_ATTN_LOCAL_BF16") == "1"
         )
-        gate = None
-        if profile:
-            torch.musa.synchronize()
-            profile_start = time.perf_counter()
-
-            def profile_mark(name: str) -> None:
-                nonlocal profile_start
-                torch.musa.synchronize()
-                now = time.perf_counter()
-                profile_times.append((name, (now - profile_start) * 1000))
-                profile_start = now
-
-            q = self.linear_q(q_x)
-            profile_mark("q_projection")
-            k = self.linear_k(kv_x)
-            profile_mark("k_projection")
-            v = self.linear_v(kv_x)
-            profile_mark("v_projection")
-            q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            q = q / math.sqrt(self.c_hidden)
-            profile_mark("qkv_layout_and_scale")
-        elif use_musa_qkvg:
-            _quick_counts["qkvg"] += 1
-            weight, bias = self._get_qkvg_parameters()
-            projections = F.linear(q_x, weight, bias)
-            projection_width = self.c_hidden * self.num_heads
-            qkv, gate = projections.split(
-                (projection_width * 3, projection_width), dim=-1
+        if use_local_bf16:
+            _quick_counts["attn_local_bf16_calls"] += 1
+        with (torch.autocast("musa", dtype=torch.bfloat16)
+              if use_local_bf16 else nullcontext()):
+            profile = getattr(self, "_profile_local_attention", False)
+            profile_times = [] if profile else None
+            use_musa_qkvg = (
+                not profile
+                and not self.training
+                and q_x is kv_x
+                and q_x.device.type == "musa"
+                and self.linear_g is not None
+                and self.linear_q.bias is not None
+                and self.c_q >= 512
+                and self.c_q == self.c_k == self.c_v
+                and os.getenv("PROTENIX_DISABLE_MUSA_ATTENTION_QKVG_FUSION") != "1"
             )
-            q, k, v = qkv.split(projection_width, dim=-1)
-            q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            q = q / math.sqrt(self.c_hidden)
-        else:
-            q, k, v = self._prep_qkv(q_x=q_x, kv_x=kv_x, apply_scale=True)
+            gate = None
+            if profile:
+                torch.musa.synchronize()
+                profile_start = time.perf_counter()
 
-        if attn_bias is not None:
-            if len(attn_bias.shape) != len(q.shape):
-                # Expand at head dim, got shape [..., 1, Q, K]
-                attn_bias = attn_bias.unsqueeze(dim=-3)
+                def profile_mark(name: str) -> None:
+                    nonlocal profile_start
+                    torch.musa.synchronize()
+                    now = time.perf_counter()
+                    profile_times.append((name, (now - profile_start) * 1000))
+                    profile_start = now
 
-        if trunked_attn_bias is not None:
-            # NOTE: trunked_attn_bias can only be used with "local_cross_attention" method
-            if len(trunked_attn_bias.shape) != len(q.shape) + 1:
-                # Expand at head dim, got shape [..., 1, n_trunks, n_queries, n_keys]
-                trunked_attn_bias = trunked_attn_bias.unsqueeze(dim=-4)
-
-        if n_queries and n_keys:
-            if self.local_attention_method == "global_attention_with_bias":
-                local_attn_bias = create_local_attn_bias(
-                    q.shape[-2], n_queries, n_keys, inf=inf, device=q.device
+                q = self.linear_q(q_x)
+                profile_mark("q_projection")
+                k = self.linear_k(kv_x)
+                profile_mark("k_projection")
+                v = self.linear_v(kv_x)
+                profile_mark("v_projection")
+                q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                q = q / math.sqrt(self.c_hidden)
+                profile_mark("qkv_layout_and_scale")
+            elif use_musa_qkvg:
+                _quick_counts["qkvg"] += 1
+                weight, bias = self._get_qkvg_parameters()
+                projections = F.linear(q_x, weight, bias)
+                projection_width = self.c_hidden * self.num_heads
+                qkv, gate = projections.split(
+                    (projection_width * 3, projection_width), dim=-1
                 )
-                # Expand to same shape as attn_bias
-                local_attn_bias = local_attn_bias.reshape(
-                    (1,) * (len(q.shape[:-2])) + local_attn_bias.shape
-                )
-                if attn_bias is not None:
-                    if inplace_safe:
-                        local_attn_bias += attn_bias
-                    else:
-                        local_attn_bias = local_attn_bias + attn_bias
+                q, k, v = qkv.split(projection_width, dim=-1)
+                q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                q = q / math.sqrt(self.c_hidden)
+            else:
+                q, k, v = self._prep_qkv(q_x=q_x, kv_x=kv_x, apply_scale=True)
+
+            if attn_bias is not None:
+                if len(attn_bias.shape) != len(q.shape):
+                    # Expand at head dim, got shape [..., 1, Q, K]
+                    attn_bias = attn_bias.unsqueeze(dim=-3)
+
+            if trunked_attn_bias is not None:
+                # NOTE: trunked_attn_bias can only be used with "local_cross_attention" method
+                if len(trunked_attn_bias.shape) != len(q.shape) + 1:
+                    # Expand at head dim, got shape [..., 1, n_trunks, n_queries, n_keys]
+                    trunked_attn_bias = trunked_attn_bias.unsqueeze(dim=-4)
+
+            if n_queries and n_keys:
+                if self.local_attention_method == "global_attention_with_bias":
+                    local_attn_bias = create_local_attn_bias(
+                        q.shape[-2], n_queries, n_keys, inf=inf, device=q.device
+                    )
+                    # Expand to same shape as attn_bias
+                    local_attn_bias = local_attn_bias.reshape(
+                        (1,) * (len(q.shape[:-2])) + local_attn_bias.shape
+                    )
+                    if attn_bias is not None:
+                        if inplace_safe:
+                            local_attn_bias += attn_bias
+                        else:
+                            local_attn_bias = local_attn_bias + attn_bias
+                    o = _attention(
+                        q=q,
+                        k=k,
+                        v=v,
+                        attn_bias=local_attn_bias,
+                        use_efficient_implementation=self.use_efficient_implementation,
+                        inplace_safe=inplace_safe,
+                    )
+
+                elif self.local_attention_method == "local_cross_attention":
+                    o = _local_attention(
+                        q=q,
+                        k=k,
+                        v=v,
+                        n_queries=n_queries,
+                        n_keys=n_keys,
+                        attn_bias=attn_bias,
+                        trunked_attn_bias=trunked_attn_bias,
+                        inf=inf,
+                        use_efficient_implementation=self.use_efficient_implementation,
+                        inplace_safe=inplace_safe,
+                        chunk_size=chunk_size,
+                        profile_times=profile_times,
+                    )
+                else:
+                    raise ValueError(
+                        f"Invalid local attention method: {self.local_attention_method}"
+                    )
+            else:
                 o = _attention(
                     q=q,
                     k=k,
                     v=v,
-                    attn_bias=local_attn_bias,
-                    use_efficient_implementation=self.use_efficient_implementation,
-                    inplace_safe=inplace_safe,
-                )
-
-            elif self.local_attention_method == "local_cross_attention":
-                o = _local_attention(
-                    q=q,
-                    k=k,
-                    v=v,
-                    n_queries=n_queries,
-                    n_keys=n_keys,
                     attn_bias=attn_bias,
-                    trunked_attn_bias=trunked_attn_bias,
-                    inf=inf,
                     use_efficient_implementation=self.use_efficient_implementation,
                     inplace_safe=inplace_safe,
-                    chunk_size=chunk_size,
-                    profile_times=profile_times,
-                )
+                )  # [*, H, Q, C_hidden]
+            o = o.transpose(-2, -3)  # o: [*, Q, H, C_hidden]
+            if profile:
+                torch.musa.synchronize()
+                profile_start = time.perf_counter()
+                if self.linear_g is not None:
+                    g = self.sigmoid(self.linear_g(q_x))
+                    g = g.view(g.shape[:-1] + (self.num_heads, -1))
+                    profile_mark("output_gate_projection")
+                    o = o * g
+                    profile_mark("output_gate_multiply")
+                o = flatten_final_dims(o, num_dims=2)
+                o = self.linear_o(o)
+                profile_mark("output_projection")
+                self._last_local_profile = profile_times
             else:
-                raise ValueError(
-                    f"Invalid local attention method: {self.local_attention_method}"
-                )
-        else:
-            o = _attention(
-                q=q,
-                k=k,
-                v=v,
-                attn_bias=attn_bias,
-                use_efficient_implementation=self.use_efficient_implementation,
-                inplace_safe=inplace_safe,
-            )  # [*, H, Q, C_hidden]
-        o = o.transpose(-2, -3)  # o: [*, Q, H, C_hidden]
-        if profile:
-            torch.musa.synchronize()
-            profile_start = time.perf_counter()
-            if self.linear_g is not None:
-                g = self.sigmoid(self.linear_g(q_x))
-                g = g.view(g.shape[:-1] + (self.num_heads, -1))
-                profile_mark("output_gate_projection")
-                o = o * g
-                profile_mark("output_gate_multiply")
-            o = flatten_final_dims(o, num_dims=2)
-            o = self.linear_o(o)
-            profile_mark("output_projection")
-            self._last_local_profile = profile_times
-        else:
-            o = self._wrap_up(o, q_x, gate=gate)  # q_x: [*, Q, c_q]
-
-        return o
+                o = self._wrap_up(o, q_x, gate=gate)  # q_x: [*, Q, c_q]
+        return o.to(dtype=input_dtype) if use_local_bf16 else o
 
 
 def gather_pair_embedding_in_dense_trunk(
