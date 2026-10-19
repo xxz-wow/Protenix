@@ -224,6 +224,12 @@ class OpenFoldLayerNorm(nn.Module):
             self.register_parameter("bias", None)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if (x.device.type == "musa" and not torch.is_grad_enabled() and not self.training
+                and not getattr(self, "_musa_skip_fast_ln", False)
+                and os.getenv("PROTENIX_DISABLE_MUSA_FAST_LN") != "1"):
+            from protenix.model.layer_norm.layer_norm import FusedLayerNormAffineFunction
+            COUNTS["fast_ln"] += 1
+            return FusedLayerNormAffineFunction.apply(x, self.weight, self.bias, self.c_in, self.eps)
         d = x.dtype
         if d is torch.bfloat16:
             with torch.amp.autocast("cuda", enabled=False):
