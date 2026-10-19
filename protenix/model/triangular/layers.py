@@ -22,7 +22,7 @@ from typing import Callable, List, Optional, Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from protenix.model.musa_kernels.runtime import COUNTS, STATS
+from protenix.model.musa_kernels.runtime import COUNTS, STATS, bias_all_zeros
 from scipy.stats import truncnorm
 
 from protenix.model.utils import (
@@ -197,6 +197,7 @@ class OpenfoldLinear(nn.Linear):
                 return nn.functional.linear(input, self.weight.to(dtype=d), bias)
 
         return nn.functional.linear(input, self.weight, self.bias)
+
 
 
 class OpenFoldLayerNorm(nn.Module):
@@ -453,7 +454,8 @@ class Attention(nn.Module):
             k = k.reshape(shape).transpose(-2, -3)
             v = v.reshape(shape).transpose(-2, -3)
             out = _tri_attention(q, k, v, [] if biases is None else biases,
-                                 confidence=getattr(self, "_musa_confidence", False))
+                                 confidence=getattr(self, "_musa_confidence", False),
+                                  mask_all_one=getattr(self, "_musa_mask_all_one", None))
             out = out * torch.sigmoid(g).reshape(shape)
             STATS["qkvg_calls"] += 1
             return self.linear_o(out.reshape(out.shape[:-2] + (-1,)))
@@ -487,7 +489,8 @@ class Attention(nn.Module):
                 )
             o = _deepspeed_evo_attn(q, k, v, biases)
         elif triangle_attention == "triattention":
-            o = _tri_attention(q, k, v, biases, confidence=getattr(self, "_musa_confidence", False))
+            o = _tri_attention(q, k, v, biases, confidence=getattr(self, "_musa_confidence", False),
+                                  mask_all_one=getattr(self, "_musa_mask_all_one", None))
         elif triangle_attention == "musa_flash_no_padding":
             o = _musa_flash_attention_no_padding(q, k, v, biases[1])
         elif triangle_attention == "cuequivariance":
@@ -586,6 +589,7 @@ def _tri_attention(
     v: torch.Tensor,
     biases: List[torch.Tensor],
     confidence: bool = False,
+    mask_all_one: Optional[bool] = None,
 ) -> torch.Tensor:
     """ ""
     Compute attention using TriAttention kernel.
@@ -605,7 +609,7 @@ def _tri_attention(
         supported = (q.dtype == torch.bfloat16 and k.dtype == q.dtype and v.dtype == q.dtype
                      and q.ndim == 4 and q.shape[-3] == 4 and q.shape[-1] == 32
                      and len(biases) == 2)
-        if supported and not bool(torch.any(biases[0] != 0).item()):
+        if supported and (mask_all_one if mask_all_one is not None else bias_all_zeros(biases[0])):
             n, h, seq, d = q.shape
             out, _, _, _ = torch.ops.aten._scaled_dot_product_attention_flash_musa.default(
                 q.contiguous(), k.contiguous(), v.contiguous(),

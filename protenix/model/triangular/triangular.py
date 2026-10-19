@@ -1,3 +1,4 @@
+from protenix.model.musa_kernels.runtime import mask_all_ones
 # Copyright 2024 ByteDance and/or its affiliates.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -495,7 +496,7 @@ class TriangleMultiplicativeUpdate(BaseTriangleMultiplicativeUpdate):
                 and z.shape[-2] == z.shape[-3] and z.shape[-1] == self.c_z == self.c_hidden == 128):
             confidence = (getattr(self, "_musa_confidence", False)
                 and not torch.is_autocast_enabled("musa")
-                and (mask is None or bool(torch.all(mask != 0).item()))
+                and mask_all_ones(mask)
                 and os.getenv("PROTENIX_DISABLE_MUSA_CONFIDENCE_MUTLASS") != "1")
             main = (torch.is_autocast_enabled("musa") and mask is None
                     and os.getenv("PROTENIX_DISABLE_MUSA_TRIANGLE_FUSION") != "1")
@@ -744,10 +745,17 @@ class TriangleAttention(nn.Module):
         Returns:
             [*, I, J, C_in] output tensor
         """
+        # Cache the source mask, not the per-call derived bias tensor.
+        self.mha._musa_mask_all_one = (
+            mask_all_ones(mask)
+            if x.device.type == "musa" and not self.training
+            and not torch.is_grad_enabled() and triangle_attention == "triattention"
+            else None
+        )
         confidence_bf16 = (getattr(self, "_musa_confidence", False)
             and x.device.type == "musa" and not torch.is_grad_enabled() and not self.training
             and not torch.is_autocast_enabled("musa") and triangle_attention == "triattention"
-            and (mask is None or bool(torch.all(mask != 0).item()))
+            and self.mha._musa_mask_all_one
             and os.getenv("PROTENIX_DISABLE_MUSA_CONFIDENCE_V21") != "1")
         context = torch.autocast("musa", dtype=torch.bfloat16) if confidence_bf16 else nullcontext()
         with context:
