@@ -636,7 +636,19 @@ def _tri_attention(
         k = reshape_dims(k)
         v = reshape_dims(v)
         biases = [reshape_dims(b) for b in biases]
-    o = TriAttentionFunction.apply(q, k, v, biases[0], biases[1])
+    use_v21 = (confidence and not torch.is_grad_enabled() and q.device.type == "musa"
+               and q.dtype == k.dtype == v.dtype == torch.bfloat16 and q.ndim == 5
+               and q.shape == k.shape == v.shape and q.shape[-2:] == (4, 32)
+               and len(biases) == 2 and not biases[0].requires_grad
+               and tuple(biases[0].shape) == (q.shape[0], q.shape[1], 1, 1, q.shape[2])
+               and tuple(biases[1].shape) == (q.shape[0], 1, 4, q.shape[2], q.shape[2])
+               and os.getenv("PROTENIX_DISABLE_MUSA_CONFIDENCE_V21") != "1")
+    if use_v21:
+        from protenix.model.tri_attention.v21 import forward
+        o = forward(q, k, v, biases[0], biases[1])
+        STATS["v21_native_calls"] += 1
+    else:
+        o = TriAttentionFunction.apply(q, k, v, biases[0], biases[1])
 
     o = o.reshape(orig_shape)
     return o

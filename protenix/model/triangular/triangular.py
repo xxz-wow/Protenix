@@ -744,50 +744,59 @@ class TriangleAttention(nn.Module):
         Returns:
             [*, I, J, C_in] output tensor
         """
-        if mask is None:
-            # [*, I, J]
-            mask = x.new_ones(
-                x.shape[:-1],
-            )
+        confidence_bf16 = (getattr(self, "_musa_confidence", False)
+            and x.device.type == "musa" and not torch.is_grad_enabled() and not self.training
+            and not torch.is_autocast_enabled("musa") and triangle_attention == "triattention"
+            and (mask is None or bool(torch.all(mask != 0).item()))
+            and os.getenv("PROTENIX_DISABLE_MUSA_CONFIDENCE_V21") != "1")
+        context = torch.autocast("musa", dtype=torch.bfloat16) if confidence_bf16 else nullcontext()
+        with context:
+            if confidence_bf16:
+                COUNTS["conf_v21"] += 1
+            if mask is None:
+                # [*, I, J]
+                mask = x.new_ones(
+                    x.shape[:-1],
+                )
 
-        if not self.starting:
-            x = x.transpose(-2, -3)
-            mask = mask.transpose(-1, -2)
+            if not self.starting:
+                x = x.transpose(-2, -3)
+                mask = mask.transpose(-1, -2)
 
-        # [*, I, J, C_in]
-        x = self.layer_norm(x)
+            # [*, I, J, C_in]
+            x = self.layer_norm(x)
 
-        # [*, I, 1, 1, J]
-        mask_bias = (self.inf * (mask - 1))[..., :, None, None, :]
+            # [*, I, 1, 1, J]
+            mask_bias = (self.inf * (mask - 1))[..., :, None, None, :]
 
-        # [*, H, I, J]
-        triangle_bias = permute_final_dims(self.linear(x), (2, 0, 1))
+            # [*, H, I, J]
+            triangle_bias = permute_final_dims(self.linear(x), (2, 0, 1))
 
-        # [*, 1, H, I, J]
-        triangle_bias = triangle_bias.unsqueeze(-4)
+            # [*, 1, H, I, J]
+            triangle_bias = triangle_bias.unsqueeze(-4)
 
-        biases = [mask_bias, triangle_bias]
+            biases = [mask_bias, triangle_bias]
 
-        if chunk_size is not None:
-            x = self._chunk(
-                x,
-                biases,
-                chunk_size,
-                triangle_attention=triangle_attention,
-                inplace_safe=inplace_safe,
-            )
-        else:
-            x = self.mha(
-                q_x=x,
-                kv_x=x,
-                biases=biases,
-                triangle_attention=triangle_attention,
-            )
+            if chunk_size is not None:
+                x = self._chunk(
+                    x,
+                    biases,
+                    chunk_size,
+                    triangle_attention=triangle_attention,
+                    inplace_safe=inplace_safe,
+                )
+            else:
+                x = self.mha(
+                    q_x=x,
+                    kv_x=x,
+                    biases=biases,
+                    triangle_attention=triangle_attention,
+                )
 
-        if not self.starting:
-            x = x.transpose(-2, -3)
+            if not self.starting:
+                x = x.transpose(-2, -3)
 
-        return x
+            return x.float() if confidence_bf16 else x
 
 
 # Implements Algorithm 13
