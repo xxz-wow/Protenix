@@ -191,7 +191,12 @@ class AttentionPairBias(nn.Module):
             biases = pair_bias_cache["biases"]
             if self not in biases:
                 weight = (self.linear_nobias_z.weight * self.layernorm_z.weight[None, :])[:, :, None, None]
-                biases[self] = F.conv2d(z, weight)
+                bias = F.conv2d(z, weight)
+                if (bias.device.type == "musa"
+                        and os.getenv("PROTENIX_ENABLE_MUSA_PAIR_BIAS_BF16_CACHE") == "1"):
+                    bias = bias.to(dtype=torch.bfloat16)
+                    STATS["pair_bias_bf16_builds"] += 1
+                biases[self] = bias
                 STATS["pair_bias_builds"] += 1
             else:
                 STATS["pair_bias_hits"] += 1
