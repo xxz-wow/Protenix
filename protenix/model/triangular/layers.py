@@ -423,6 +423,34 @@ class Attention(nn.Module):
         Returns
             [*, Q, C_q] attention update
         """
+        same_input = (q_x is kv_x or (q_x.shape == kv_x.shape
+            and q_x.device == kv_x.device and q_x.dtype == kv_x.dtype
+            and q_x.stride() == kv_x.stride() and q_x.data_ptr() == kv_x.data_ptr()))
+        if (not torch.is_grad_enabled() and not self.training and same_input
+                and q_x.device.type == "musa" and torch.is_autocast_enabled("musa")
+                and q_x.ndim == 3 and q_x.shape[-1] == self.c_q == self.c_k == self.c_v == 128
+                and self.no_heads == 4 and self.c_hidden == 32 and self.linear_g is not None
+                and triangle_attention == "triattention" and q_x.shape[-2] > 16
+                and os.getenv("PROTENIX_DISABLE_MUSA_TRIANGLE_QKVG") != "1"):
+            weights = [m.weight for m in (self.linear_q, self.linear_k, self.linear_v, self.linear_g)]
+            signature = tuple((id(w), w._version, w.device, w.dtype) for w in weights)
+            cache = getattr(self, "_musa_qkvg_cache", None)
+            if cache is None or cache[0] != signature:
+                packed = torch.cat(weights, dim=0).to(torch.bfloat16)
+                self._musa_qkvg_cache = (signature, packed)
+                STATS["weight_builds"] += 1
+            else:
+                packed = cache[1]
+            q, k, v, g = nn.functional.linear(q_x.to(torch.bfloat16), packed).chunk(4, dim=-1)
+            shape = q.shape[:-1] + (self.no_heads, self.c_hidden)
+            q = q.reshape(shape).transpose(-2, -3) / math.sqrt(self.c_hidden)
+            k = k.reshape(shape).transpose(-2, -3)
+            v = v.reshape(shape).transpose(-2, -3)
+            out = _tri_attention(q, k, v, [] if biases is None else biases,
+                                 confidence=getattr(self, "_musa_confidence", False))
+            out = out * torch.sigmoid(g).reshape(shape)
+            STATS["qkvg_calls"] += 1
+            return self.linear_o(out.reshape(out.shape[:-2] + (-1,)))
         assert triangle_attention in [
             "torch",
             "deepspeed",
@@ -453,7 +481,7 @@ class Attention(nn.Module):
                 )
             o = _deepspeed_evo_attn(q, k, v, biases)
         elif triangle_attention == "triattention":
-            o = _tri_attention(q, k, v, biases)
+            o = _tri_attention(q, k, v, biases, confidence=getattr(self, "_musa_confidence", False))
         elif triangle_attention == "musa_flash_no_padding":
             o = _musa_flash_attention_no_padding(q, k, v, biases[1])
         elif triangle_attention == "cuequivariance":
