@@ -16,15 +16,20 @@ import os
 from pathlib import Path
 from typing import Any
 
-import torch
 import triton
 
+from protenix.utils.accelerator import accelerator_api
 from protenix.utils.distributed import DIST_WRAPPER
 
-device_capability = torch.cuda.get_device_capability()
+
+device_api = accelerator_api()
+if device_api is None:
+    raise RuntimeError("TriangleAttention autotuning requires a CUDA or MUSA device")
+
+device_capability = device_api.get_device_capability()
 device_capability = f"{device_capability[0]}-{device_capability[1]}"
 
-device_name = torch.cuda.get_device_name().replace(" ", "-")
+device_name = device_api.get_device_name().replace(" ", "-")
 
 
 def get_config_dir() -> Path:
@@ -65,6 +70,7 @@ _attention_fwd_configs = [
     triton.Config(kwargs={"BLOCK_M": 16, "BLOCK_N": 32}, num_warps=1, num_stages=2),
     triton.Config(kwargs={"BLOCK_M": 32, "BLOCK_N": 16}, num_warps=1, num_stages=2),
     triton.Config(kwargs={"BLOCK_M": 64, "BLOCK_N": 32}, num_warps=4, num_stages=2),
+    triton.Config(kwargs={"BLOCK_M": 128, "BLOCK_N": 16}, num_warps=4, num_stages=1),
     triton.Config(kwargs={"BLOCK_M": 64, "BLOCK_N": 16}, num_warps=2, num_stages=3),
     triton.Config(kwargs={"BLOCK_M": 32, "BLOCK_N": 32}, num_warps=1, num_stages=1),
     triton.Config(kwargs={"BLOCK_M": 128, "BLOCK_N": 16}, num_warps=2, num_stages=2),
@@ -85,6 +91,12 @@ _attention_bwd_dq_configs = [
     triton.Config({"BLOCK_M": 16, "BLOCK_N": 64}, num_warps=1, num_stages=1),
     triton.Config({"BLOCK_M": 32, "BLOCK_N": 64}, num_warps=2, num_stages=1),
     triton.Config({"BLOCK_M": 64, "BLOCK_N": 32}, num_warps=2, num_stages=2),
+    triton.Config({"BLOCK_M": 32, "BLOCK_N": 64}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 32}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64}, num_warps=4, num_stages=2),
+    triton.Config({"BLOCK_M": 128, "BLOCK_N": 16}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 128, "BLOCK_N": 32}, num_warps=4, num_stages=1),
 ]
 
 _attention_bwd_dkdv_configs = [
@@ -98,6 +110,12 @@ _attention_bwd_dkdv_configs = [
     triton.Config({"BLOCK_M": 32, "BLOCK_N": 16}, num_warps=1, num_stages=2),
     triton.Config({"BLOCK_M": 32, "BLOCK_N": 32}, num_warps=1, num_stages=1),
     triton.Config({"BLOCK_M": 16, "BLOCK_N": 32}, num_warps=2, num_stages=1),
+    triton.Config({"BLOCK_M": 32, "BLOCK_N": 64}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 32}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64}, num_warps=4, num_stages=2),
+    triton.Config({"BLOCK_M": 128, "BLOCK_N": 16}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 128, "BLOCK_N": 32}, num_warps=4, num_stages=1),
 ]
 
 _attention_bwd_dbias2_configs = [
@@ -111,6 +129,11 @@ _attention_bwd_dbias2_configs = [
     triton.Config({"BLOCK_M": 32, "BLOCK_N": 32}, num_warps=2, num_stages=2),
     triton.Config({"BLOCK_M": 16, "BLOCK_N": 16}, num_warps=4, num_stages=3),
     triton.Config({"BLOCK_M": 32, "BLOCK_N": 32}, num_warps=2, num_stages=3),
+    triton.Config({"BLOCK_M": 32, "BLOCK_N": 64}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 32}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 16, "BLOCK_N": 128}, num_warps=4, num_stages=1),
+    triton.Config({"BLOCK_M": 32, "BLOCK_N": 128}, num_warps=4, num_stages=1),
 ]
 
 _attention_bwd_preprocess_configs = [

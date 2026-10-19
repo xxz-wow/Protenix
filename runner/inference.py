@@ -18,7 +18,6 @@ import time
 import traceback
 import urllib.request
 from argparse import Namespace
-from contextlib import nullcontext
 from os.path import exists as opexists, join as opjoin
 from typing import Any, Mapping
 
@@ -36,6 +35,16 @@ from protenix.config.config import parse_configs, parse_sys_args
 from protenix.data.inference.infer_dataloader import get_inference_dataloader
 from protenix.model.protenix import Protenix
 from protenix.utils.distributed import DIST_WRAPPER
+from protenix.utils.accelerator import (
+    accelerator_autocast,
+    accelerator_device,
+    accelerator_device_count,
+    accelerator_empty_cache,
+    accelerator_name,
+    accelerator_set_device,
+    distributed_backend,
+    visible_devices_env,
+)
 from protenix.utils.seed import seed_everything
 from protenix.utils.torch_utils import to_device
 from protenix.web_service.dependency_url import URL
@@ -92,21 +101,24 @@ class InferenceRunner(object):
             f"Distributed environment: world size: {DIST_WRAPPER.world_size}, "
             f"global rank: {DIST_WRAPPER.rank}, local rank: {DIST_WRAPPER.local_rank}"
         )
-        self.use_cuda = torch.cuda.device_count() > 0
-        if self.use_cuda:
-            self.device = torch.device(f"cuda:{DIST_WRAPPER.local_rank}")
-            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-            all_gpu_ids = ",".join(str(x) for x in range(torch.cuda.device_count()))
-            devices = os.getenv("CUDA_VISIBLE_DEVICES", all_gpu_ids)
+        self.accelerator = accelerator_name()
+        self.use_cuda = self.accelerator == "cuda"
+        if self.accelerator is not None:
+            self.device = accelerator_device(DIST_WRAPPER.local_rank)
+            if self.use_cuda:
+                os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            all_gpu_ids = ",".join(str(x) for x in range(accelerator_device_count()))
+            visible_env = visible_devices_env()
+            devices = os.getenv(visible_env, all_gpu_ids)
             logging.info(
-                f"LOCAL_RANK: {DIST_WRAPPER.local_rank} - CUDA_VISIBLE_DEVICES: [{devices}]"
+                f"LOCAL_RANK: {DIST_WRAPPER.local_rank} - {visible_env}: [{devices}]"
             )
-            torch.cuda.set_device(self.device)
+            accelerator_set_device(self.device)
         else:
             self.device = torch.device("cpu")
 
         if DIST_WRAPPER.world_size > 1:
-            dist.init_process_group(backend="nccl")
+            dist.init_process_group(backend=distributed_backend())
 
         if self.configs.triangle_attention == "deepspeed":
             env = os.getenv("CUTLASS_PATH", None)
@@ -220,11 +232,7 @@ class InferenceRunner(object):
             "fp16": torch.float16,
         }[self.configs.dtype]
 
-        enable_amp = (
-            torch.autocast(device_type="cuda", dtype=eval_precision)
-            if torch.cuda.is_available()
-            else nullcontext()
-        )
+        enable_amp = accelerator_autocast(eval_precision)
 
         data = to_device(data, self.device)
         with enable_amp:
@@ -619,7 +627,7 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                     f"Model forward time: {t2_end - t2_start:.2f}s. "
                     f"Results saved to {configs.dump_dir}"
                 )
-                torch.cuda.empty_cache()
+                accelerator_empty_cache()
             except Exception as e:
                 error_message = (
                     f"[Rank {DIST_WRAPPER.rank}] {sample_name} failed: {e}\n"
@@ -632,7 +640,7 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                     encoding="utf-8",
                 ) as f:
                     f.write(error_message)
-                torch.cuda.empty_cache()
+                accelerator_empty_cache()
         t1_end = time.time()
         logger.info(
             f"[Rank {DIST_WRAPPER.rank}] Seed {seed} completed in {t1_end - t1_start:.2f}s."

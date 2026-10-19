@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import builtins
+import hashlib
 import json
 
 import logging
@@ -29,6 +30,7 @@ from protenix.model.tri_attention.autotune_helpers import (
     config_dir,
     config_to_dict,
     device_capability,
+    device_name,
     dict_to_config,
 )
 
@@ -90,8 +92,15 @@ class Autotuner(triton.runtime.Autotuner):
         self.cache_file = None
         if config_dir is not None:
             config_dir.mkdir(parents=True, exist_ok=True)
-            # TODO: adjust this to also include the fn's hash?
-            self.cache_file = config_dir / f"{fn.__name__}_{device_capability}.json"
+            config_signature = hashlib.sha256(
+                json.dumps(
+                    [config_to_dict(config) for config in configs], sort_keys=True
+                ).encode()
+            ).hexdigest()[:12]
+            self.cache_file = (
+                config_dir
+                / f"{fn.__name__}_{device_name}_{device_capability}_{config_signature}.json"
+            )
             # Load any previously cached data
             if self.cache_file.exists():
                 try:
