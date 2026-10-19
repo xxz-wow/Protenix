@@ -490,6 +490,51 @@ class TriangleMultiplicativeUpdate(BaseTriangleMultiplicativeUpdate):
         Returns:
             [*, N_res, N_res, C_z] output tensor
         """
+        if (not torch.is_grad_enabled() and not self.training and z.device.type == "musa"
+                and triangle_multiplicative == "torch" and z.ndim == 3 and mask is None
+                and z.shape[-2] == z.shape[-3] and z.shape[-1] == self.c_z == self.c_hidden == 128
+                and torch.is_autocast_enabled("musa")
+                and os.getenv("PROTENIX_DISABLE_MUSA_TRIANGLE_FUSION") != "1"):
+            from protenix.model.musa_kernels.triangle_fusion import GatedLayout, OutputGate, norm_layout, gate_write
+            import triton
+            weights = [m.weight for m in (self.linear_a_g, self.linear_a_p, self.linear_b_g, self.linear_b_p, self.linear_g)]
+            signature = tuple((id(w), w._version, w.device, w.dtype) for w in weights)
+            cache = getattr(self, "_musa_output_weights", None)
+            if cache is None or cache[0] != signature:
+                wp = torch.cat(weights[:4], dim=0).to(torch.bfloat16)
+                wg = weights[4].to(torch.bfloat16)
+                self._musa_output_weights = (signature, wp, wg)
+                STATS["mul_weight_builds"] += 1
+            else:
+                _, wp, wg = cache
+            zn = self.layer_norm_in(z).to(torch.bfloat16)
+            p = F.linear(zn, wp)
+            gate = F.linear(zn, wg)
+            a, b = GatedLayout.apply(p)
+            x = torch.matmul(a, b.transpose(-1, -2)) if self._outgoing else torch.matmul(a.transpose(-1, -2), b)
+            if (z.is_contiguous() and torch.get_autocast_dtype("musa") == torch.bfloat16):
+                n = z.shape[-2]
+                ln = self.layer_norm_out
+                norm = torch.empty((n, n, 128), device=z.device, dtype=torch.bfloat16)
+                norm_layout[(triton.cdiv(n*n, 32),)](x, ln.weight.to(torch.bfloat16), ln.bias.to(torch.bfloat16),
+                    norm, n*n, 128, ln.eps, num_warps=4, enable_fp_fusion=False)
+                x = self.linear_z(norm)
+                out = z if inplace_safe else torch.empty_like(x)
+                gate_write[(triton.cdiv(x.numel(), 1024),)](x, gate, z, out, x.numel(),
+                    inplace_safe and _add_with_inplace, 1024, num_warps=4, enable_fp_fusion=False)
+                STATS["mul_output_calls"] += 1
+                return out
+            # Older shared-cast path remains the fallback for strided inputs.
+            ln = self.layer_norm_out
+            with torch.autocast("musa", enabled=False):
+                x = F.layer_norm(x.movedim(-3, -1), ln.c_in,
+                    ln.weight.to(x.dtype) if ln.weight is not None else None,
+                    ln.bias.to(x.dtype) if ln.bias is not None else None, ln.eps)
+            x = self.linear_z(x)
+            out = OutputGate.apply(x, gate) if z.shape[-2] >= 328 and x.is_contiguous() and gate.is_contiguous() else x * torch.sigmoid(gate)
+            if inplace_safe:
+                return z.add_(out) if _add_with_inplace else z.copy_(out)
+            return out
         _input_inplace_safe = inplace_safe is True
 
         # Note: cuequivariance requires that the hidden dimension c must equal c_z.
