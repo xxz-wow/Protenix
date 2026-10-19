@@ -192,6 +192,25 @@ class Transition(nn.Module):
         self.linear_no_bias = LinearNoBias(
             in_features=n * c_in, out_features=c_in, initializer="zeros"
         )
+        self._swiglu_weight = None
+        self._swiglu_weight_key = None
+
+    @torch.no_grad()
+    def _get_swiglu_weight(self) -> torch.Tensor:
+        weight_a = self.linear_no_bias_a.weight
+        weight_b = self.linear_no_bias_b.weight
+        key = (
+            weight_a.data_ptr(),
+            weight_a._version,
+            weight_b.data_ptr(),
+            weight_b._version,
+            weight_a.device,
+            weight_a.dtype,
+        )
+        if self._swiglu_weight is None or self._swiglu_weight_key != key:
+            self._swiglu_weight = torch.cat((weight_a, weight_b), dim=0)
+            self._swiglu_weight_key = key
+        return self._swiglu_weight
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -215,6 +234,25 @@ class Transition(nn.Module):
             size = x.shape[-2]
             x = x.reshape(-1, dim_size)
             chunk_num = 1 if size < 3200 else 8
+            use_musa_swiglu = (
+                x.device.type == "musa"
+                and hasattr(F, "swish_glu")
+                and os.getenv("PROTENIX_DISABLE_MUSA_SWIGLU") != "1"
+            )
+            swiglu_weight = self._get_swiglu_weight() if use_musa_swiglu else None
+            if use_musa_swiglu: _quick_counts["swiglu"] += 1
+            if chunk_num == 1:
+                y = self.layernorm1(x)
+                if use_musa_swiglu:
+                    b = F.swish_glu(F.linear(y, swiglu_weight))
+                else:
+                    a = self.linear_no_bias_a(y)
+                    a = F.silu(a, True)
+                    b = self.linear_no_bias_b(y)
+                    b *= a
+                b = self.linear_no_bias(b)
+                return b.reshape(*other_dims, self.c_in)
+
             chunks = torch.chunk(x, chunk_num, dim=-2)
             outputs = torch.empty(
                 (x.shape[0], self.c_in), dtype=x.dtype, device=x.device
@@ -222,12 +260,15 @@ class Transition(nn.Module):
             start = 0
             for chunk in chunks:
                 y = self.layernorm1(chunk)
-                a = self.linear_no_bias_a(y)
-                a = F.silu(a, True)
-                b = self.linear_no_bias_b(y)
+                if use_musa_swiglu:
+                    b = F.swish_glu(F.linear(y, swiglu_weight))
+                else:
+                    a = self.linear_no_bias_a(y)
+                    a = F.silu(a, True)
+                    b = self.linear_no_bias_b(y)
+                    b *= a
+                    del a
                 del y
-                b *= a
-                del a
                 b = self.linear_no_bias(b)
                 outputs[start : start + b.shape[0]] = b
                 start += b.shape[0]
