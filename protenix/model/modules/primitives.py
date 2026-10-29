@@ -260,6 +260,24 @@ def _attention(
 
     input_dtype = q.dtype
     full_aligned_fp32 = False
+    use_musa_bf16_sdpa = (
+        use_efficient_implementation
+        and q.device.type == "musa"
+        and input_dtype == torch.bfloat16
+        and (attn_bias is None or attn_bias.dtype == input_dtype)
+        and q.ndim <= 4
+        and os.getenv("PROTENIX_DISABLE_MUSA_BF16_SDPA") != "1"
+    )
+    if use_musa_bf16_sdpa:
+        _quick_counts["std_bf16"] += 1
+        return F.scaled_dot_product_attention(
+            query=q,
+            key=k,
+            value=v,
+            attn_mask=attn_bias,
+            scale=1.0,
+        )
+
     # Preserve the original MUSA math fallback outside the supported SDPA shapes.
     if q.device.type == "musa":
         use_efficient_implementation = False
