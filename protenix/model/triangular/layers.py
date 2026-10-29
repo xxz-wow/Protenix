@@ -486,10 +486,18 @@ class Attention(nn.Module):
                 STATS["full_bf16_qkvg_cache_calls"] += 1
             projections = nn.functional.linear(q_x.to(torch.bfloat16) if cache_bf16 else q_x, packed)
             shape = projections.shape[:-1] + (self.no_heads, self.c_hidden)
-            q, k, v, g = projections.chunk(4, dim=-1)
-            q = q.reshape(shape).transpose(-2, -3) / math.sqrt(self.c_hidden)
-            k = k.reshape(shape).transpose(-2, -3)
-            v = v.reshape(shape).transpose(-2, -3)
+            if (torch.backends.musa.matmul.allow_tf32
+                    and os.getenv("PROTENIX_MUSA_QKV_LAYOUT_FUSED") == "1"
+                    and projections.shape[-2] >= 500):
+                from protenix.model.musa_kernels.tf32_pairformer_qkv_layout import qkv_layout
+                q, k, v = qkv_layout(projections, block=512, num_warps=16)
+                g = projections[..., 384:]
+                STATS["aligned_qkv_layout_calls"] += 1
+            else:
+                q, k, v, g = projections.chunk(4, dim=-1)
+                q = q.reshape(shape).transpose(-2, -3) / math.sqrt(self.c_hidden)
+                k = k.reshape(shape).transpose(-2, -3)
+                v = v.reshape(shape).transpose(-2, -3)
             out = _tri_attention(q, k, v, [] if biases is None else biases,
                                  confidence=getattr(self, "_musa_confidence", False),
                                   mask_all_one=getattr(self, "_musa_mask_all_one", None))
