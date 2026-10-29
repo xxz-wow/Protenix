@@ -294,9 +294,17 @@ def _attention(
     # [*, H, Q, K]
     a = torch.matmul(query, key)
 
-    for b in biases:
-        a += b
-    a = softmax_no_cast(a, -1)
+    probabilities = None
+    if (query.dtype == torch.float32 and not torch.is_grad_enabled()
+            and os.getenv("PROTENIX_ENABLE_FP32_BIAS_SOFTMAX", "0") == "1"):
+        from protenix.model.musa_kernels.fp32_bias_softmax import bias_softmax
+        probabilities = bias_softmax(a, biases)
+    if probabilities is None:
+        for b in biases:
+            a += b
+        a = softmax_no_cast(a, -1)
+    else:
+        a = probabilities
 
     # [*, H, Q, C_hidden]
     a = torch.matmul(a, value)
