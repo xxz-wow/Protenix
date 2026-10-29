@@ -15,6 +15,7 @@
 from typing import Optional, Union
 
 import torch
+from protenix.model.musa_kernels.runtime import STATS
 import torch.nn as nn
 
 from protenix.model.modules.embedders import FourierEmbedding, RelativePositionEncoding

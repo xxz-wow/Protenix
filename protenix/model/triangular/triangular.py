@@ -1,3 +1,4 @@
+from protenix.model.musa_kernels.runtime import mask_all_ones
 # Copyright 2024 ByteDance and/or its affiliates.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,12 +15,16 @@
 # Copyright 2021 AlQuraishi Laboratory
 
 
+import os
+
 from abc import ABC, abstractmethod
 from functools import partial, partialmethod
 from typing import List, Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from protenix.model.musa_kernels.runtime import COUNTS, STATS
 
 from protenix.model.triangular.layers import Attention, LayerNorm, OpenfoldLinear
 from protenix.model.utils import chunk_layer, is_fp16_enabled, permute_final_dims
@@ -546,12 +551,12 @@ class TriangleMultiplicativeUpdate(BaseTriangleMultiplicativeUpdate):
             # reduced-precision modes
             a_std = a.std()
             b_std = b.std()
-            if is_fp16_enabled() and a_std != 0.0 and b_std != 0.0:
+            if is_fp16_enabled(a.device.type) and a_std != 0.0 and b_std != 0.0:
                 a = a / a.std()
                 b = b / b.std()
 
-            if is_fp16_enabled():
-                with torch.amp.autocast("cuda", enabled=False):
+            if is_fp16_enabled(a.device.type):
+                with torch.amp.autocast(a.device.type, enabled=False):
                     x = self._combine_projections(a.float(), b.float())
             else:
                 x = self._combine_projections(a, b)

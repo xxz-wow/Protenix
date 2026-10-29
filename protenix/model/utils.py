@@ -512,15 +512,8 @@ def tree_map(fn: Callable, tree: Any, leaf_type: type) -> Any:
 tensor_tree_map = partial(tree_map, leaf_type=torch.Tensor)
 
 
-def is_fp16_enabled() -> bool:
-    # Autocast world
-    if hasattr(torch, "get_autocast_dtype"):
-        fp16_enabled = torch.get_autocast_dtype("cuda") == torch.float16
-    else:
-        fp16_enabled = torch.get_autocast_gpu_dtype() == torch.float16
-    fp16_enabled = fp16_enabled and torch.is_autocast_enabled()
-
-    return fp16_enabled
+def is_fp16_enabled(device_type: str = "cuda") -> bool:
+    return torch.is_autocast_enabled(device_type) and torch.get_autocast_dtype(device_type) == torch.float16
 
 
 def _fetch_dims(tree):

@@ -16,6 +16,7 @@ from functools import partial
 from typing import Callable, Optional, Union
 
 import torch
+from protenix.model.musa_kernels.runtime import STATS
 import torch.nn as nn
 import torch.nn.functional as F
 

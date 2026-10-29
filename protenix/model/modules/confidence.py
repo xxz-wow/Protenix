@@ -15,6 +15,7 @@
 from typing import Optional, Union
 
 import torch
+from protenix.model.musa_kernels.precision_cdist import cdist as precision_cdist
 import torch.nn as nn
 
 from protenix.model.modules.pairformer import PairformerStack
@@ -123,6 +124,13 @@ class ConfidenceHead(nn.Module):
         self.plddt_ln = LayerNorm(self.c_s)
         self.resolved_ln = LayerNorm(self.c_s)
 
+        # Roles select native branches in the original forward methods.
+        excluded = {"input_strunk_ln", "pae_ln", "pde_ln", "plddt_ln", "resolved_ln"}
+        for name, module in self.named_modules():
+            module._musa_confidence = True
+            if name.split(".")[-1] in excluded:
+                module._musa_skip_fast_ln = True
+
         with torch.no_grad():
             # Zero init for output layer (before softmax) to zero
             nn.init.zeros_(self.linear_no_bias_pae.weight)
@@ -174,6 +182,7 @@ class ConfidenceHead(nn.Module):
                 - pde_preds: Predicted PDE scores [..., N_sample, N_token, N_token, pde_bins].
                 - resolved_preds: Predicted resolved scores [..., N_sample, N_atom, 2].
         """
+
 
         if self.stop_gradient:
             s_inputs = s_inputs.detach()
@@ -274,9 +283,9 @@ class ConfidenceHead(nn.Module):
                 [..., N_atoms, 3] # Note: N_sample = 1 for avoiding CUDA OOM
         """
         # Embed pair distances of representative atoms:
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.amp.autocast(x_pred_rep_coords.device.type, enabled=False):
             x_pred_rep_coords = x_pred_rep_coords.to(torch.float32)
-            distance_pred = torch.cdist(
+            distance_pred = precision_cdist(
                 x_pred_rep_coords, x_pred_rep_coords
             )  # [..., N_tokens, N_tokens]
         if inplace_safe:
@@ -324,7 +333,7 @@ class ConfidenceHead(nn.Module):
             "atom_to_tokatom_idx"
         ]  # in range [0, max_atoms_per_token-1] shape: [N_atom] # influenced by crop
 
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.amp.autocast(z_pair.device.type, enabled=False):
             pae_pred = self.linear_no_bias_pae(self.pae_ln(z_pair))
             pde_pred = self.linear_no_bias_pde(
                 self.pde_ln(z_pair + z_pair.transpose(-2, -3))
