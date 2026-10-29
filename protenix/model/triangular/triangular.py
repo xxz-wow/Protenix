@@ -769,6 +769,13 @@ class TriangleAttention(nn.Module):
         Returns:
             [*, I, J, C_in] output tensor
         """
+        # Cache the source mask, not the per-call derived bias tensor.
+        self.mha._musa_mask_all_one = (
+            mask_all_ones(mask)
+            if x.device.type == "musa" and not self.training
+            and not torch.is_grad_enabled() and triangle_attention == "triattention"
+            else None
+        )
         if mask is None:
             # [*, I, J]
             mask = x.new_ones(
