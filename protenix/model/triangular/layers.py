@@ -641,6 +641,31 @@ def _deepspeed_evo_attn(
     return o
 
 
+_FP32_TRIANGLE_SCHEDULE = (None, {})
+
+def _fp32_triangle_chunk_rows(q, k):
+    """Frozen matrix-dimension schedule; an unseen shape uses original16 rows."""
+    global _FP32_TRIANGLE_SCHEDULE
+    path = os.getenv("PROTENIX_FP32_TRIANGLE_PLAN", "")
+    if not path:
+        return int(os.getenv("PROTENIX_FP32_TRIANGLE_CHUNK_ROWS", "16"))
+    if _FP32_TRIANGLE_SCHEDULE[0] != path:
+        import json
+        with open(path) as stream:
+            record = json.load(stream)
+        assert record["status"] == "pass"
+        table = record["selected"]
+        assert all(value in (8,16,32,64,128) for value in table.values())
+        _FP32_TRIANGLE_SCHEDULE = (path, table)
+    key = "x".join(map(str,(q.shape[0],q.shape[-3],q.shape[-2],k.shape[-2],q.shape[-1])))
+    table = _FP32_TRIANGLE_SCHEDULE[1]
+    if key in table:
+        STATS["fp32_triangle_plan_hits"] += 1
+    else:
+        STATS["fp32_triangle_plan_misses"] += 1
+    return table.get(key,16)
+
+
 @torch.jit.ignore
 def _tri_attention(
     q: torch.Tensor,
@@ -678,7 +703,7 @@ def _tri_attention(
         with torch.autocast("musa", enabled=False):
             if q.ndim == 4:
                 parts = []
-                requested_rows = 16
+                requested_rows = _fp32_triangle_chunk_rows(q,k) if confidence else 16
                 assert requested_rows in (8, 16, 32, 64, 128)
                 # Bound the two full FP32 logits/probability tensors by shape.
                 budget = 2 * 1024**3
