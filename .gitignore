@@ -138,3 +138,9 @@ output/
 release_data/
 debug/
 .trae/
+
+# S5000 local runtime, private checks and generated outputs
+outputs/
+*.so
+protenix/model/tri_attention/TriAttentionCache/
+optimizations/s5000/benchmarks/checks/*.json

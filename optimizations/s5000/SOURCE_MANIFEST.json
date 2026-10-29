@@ -1,0 +1,427 @@
+{
+  "delivery_format": "direct_source",
+  "upstream_repository": "https://github.com/bytedance/Protenix.git",
+  "upstream_commit": "4c355be4553512f72453ecbfb65e69f4c35d1413",
+  "source_archive_commit": "32803656ab4376363bf579fd6adc8853643070f9",
+  "optimization_count": 13,
+  "precision_policy": "Original BF16 AMP boundaries and explicit FP32 protections; TF32 enabled; no extra FP32-to-BF16 shortcuts",
+  "expected_source_sha256": {
+    "LICENSE": "add3b0d4449b29559d6f429d84a09a9b363d78fd516b3315a8ed946eb12ad8eb",
+    "runner/msa_search.py": "f2e6da81a178244e25c04ca4666a73028b4d3078280d52d6c1b070869ebc0dfc",
+    "runner/rna_msa_search.py": "8106ea53953e6b49a5744e5813055f82a9c6854e238e360eedf2788da89e2976",
+    "runner/template_search.py": "b62d711de0f8af3429c000ea60eaa43c1538431e91e8951c4bc6b93e07decd2a",
+    "runner/ema.py": "9500d6e0357d1686f5650fc418c322b1f647fa98f27139ab1975ad784bb9481c",
+    "runner/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runner/dumper.py": "c7ba3d2d42c9a700fea5efc1c9636118513a90906fd270204a4c12b72ad656d6",
+    "runner/train.py": "985cd756b53f6fcf1913a61fd08dab91068be1bb6453ff2cb230efb2cf9741d0",
+    "runner/inference.py": "3b6ad7a5b043ee9d1ea9e40cebb4c3ed1ed7f3f676c630661e0fd549a806841b",
+    "runner/batch_inference.py": "ec818cfcbcd73fa5da24da2f38793d1e9fb8eb43611d4709c579939c4d7bc5f7",
+    "configs/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "configs/configs_base.py": "d53f0af274acd3f10739555306fda499ecf9326190fec087838d05ec4f075bb1",
+    "configs/configs_data.py": "6726361b80bcf74286a9c3b7937b2d889ded241d4a2f39ff893fb6abe9889806",
+    "configs/configs_model_type.py": "b3d3c3ca64e8030e6469143831dd246d26a73c687a998ec3beb5faf98f1fe377",
+    "configs/configs_inference.py": "0a1b8f79f6b770af74d3e27f3b60b21f05848aa3477bc33ca9b16abcd7755bab",
+    "protenix/version.py": "b27dde18350e230ceab2e4edd48df60640d6d23433c9e61ac035dfcb87c1a5e7",
+    "protenix/__init__.py": "2736ff45f82f5c2ae6fd243801f786562d4ddfa6326f19cce66a72c6b9e28602",
+    "protenix/metrics/clash.py": "4f8f47b8020cdf21c3332a87561ecbfb7e826ddcf23512fc10ad940d758f0adc",
+    "protenix/metrics/rmsd.py": "9bdc90d1c3f61801c444535f75b4c56c6c524ff32e41e24c7661277fd50223b1",
+    "protenix/metrics/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/metrics/lddt_metrics.py": "f78dde38592ee2bbdb8386b83e038255a6fae2fbc24d4f6b08885970d52b0501",
+    "protenix/config/config.py": "22c134a75bf00c98b1ec85d9fb753830bca97e8b782a3c90ec60109087854c7e",
+    "protenix/config/extend_types.py": "279c6eff86e90ca22bbd91e904a1c748773a745b92ab0735d0ec7325f1baeba4",
+    "protenix/config/__init__.py": "50d0fc5cbb80a0ef4c68227b9a523b0042ce101f1954126d9b4dcc0ffb5f84a5",
+    "protenix/utils/lr_scheduler.py": "a4758ed1e3df0d623b5ca3c829edb88dd027624178ecc17aea6baf43b5487ba0",
+    "protenix/utils/metrics.py": "e69dbd717875f876ab21e33c17fa7eaa6a7d11a4543dd6d54c1ce63b188dac71",
+    "protenix/utils/cropping.py": "5a6045b2df53822313bd67a792972452b35cef8da5f72cfdf27640d0c8b9ab0b",
+    "protenix/utils/scatter_utils.py": "5a4683c560140529f2ffc9e948206d46d80586c2a06ca17a9d498fc2e8917dad",
+    "protenix/utils/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/utils/logger.py": "d4597c92f044ea5a3c9954e44824928aeb7f6f222e0050754eb495025280995a",
+    "protenix/utils/seed.py": "cf8290ffeb71a614a1e7899435e0a681c423be8eecb8f26b8572bcd55b7f3f2a",
+    "protenix/utils/distributed.py": "10e8a47fe679cfc8844534e45f032d9908bb16fb8ab714e90d74ebfc439fbbb2",
+    "protenix/utils/geometry.py": "18bf79f41026e8211196ae8d789849252e5b93f54c19ca94179ed8e7e6ca9622",
+    "protenix/utils/file_io.py": "ff17fac71adf30131790328c008b38de549357d42259d40ef9fcfd38c7f6947b",
+    "protenix/utils/accelerator.py": "ba6e8a2bd150abb60f849fc9977ca2a4939d0d6f8436a6e5d93cc07d0a3527fb",
+    "protenix/utils/training.py": "bff74880179e77e68829fa67b0123e091c1209f3633edfeac5eb01be23823c37",
+    "protenix/utils/torch_utils.py": "a91788a7ed26d2d68744d34ef9edd810e441b0e3f0701d4134d232ea87ac2d53",
+    "protenix/utils/permutation/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/utils/permutation/utils.py": "22549e0cc17fecde6e37804a0c651da9a1d62f20a6c4ce12378b30bbe31685b7",
+    "protenix/utils/permutation/permutation.py": "4684fcf24b0fa01e58703d907db6d4cca9e51cf9ed50781a7723244497c2682e",
+    "protenix/utils/permutation/atom_permutation.py": "167075327754797a7220578bedba9abc63c156d7856b86fc714c1d0d8b8ab010",
+    "protenix/utils/permutation/chain_permutation/pocket_based_permutation.py": "854c650f45eec574e3dbd4fbb958d4b6330341bf5498cfa69765f8e1902249c9",
+    "protenix/utils/permutation/chain_permutation/__init__.py": "e9b9411bbb55acd7f59db7e767268d7b24d5d2ce46552fc7b447366ac8b1c182",
+    "protenix/utils/permutation/chain_permutation/utils.py": "0357507b3ba64d69dc23ab66d9423e6913402da056e785e9751775677c66e21b",
+    "protenix/utils/permutation/chain_permutation/heuristic.py": "b98c46bc796700a41dbff9e66bd878ddb38c5d00be1b8c9800390e2ce1b7ac82",
+    "protenix/tfg/config.py": "206276a4386085a7d85ab6a0a022461d022068a7068c455e3bdf0e471cfb885b",
+    "protenix/tfg/potentials.py": "add08371d3f2312413aa6f042ebbfb5df76716915fb155959f8488e9e25e1fc1",
+    "protenix/tfg/__init__.py": "ecae9bb2512f7d522e02dd7d6d9eabe77b41649273b9a93bc7fcaaed2b6d5f45",
+    "protenix/tfg/engine.py": "94ae8e68e5b4b3ff7741bd68e630ee352e17875c220831462cf74e81e2ece6f2",
+    "protenix/model/protenix.py": "3fffbda8cef655df0a86578099d2b237ce152ef4de60ac45063ef233d57df760",
+    "protenix/model/tri_timing.py": "c61ada82575d38e1b13a2ff6641db73d08842319d0dad256f773ddefb09e9542",
+    "protenix/model/sample_confidence.py": "55a027379458f8981b2526c74be9a095587a82ab255a0a45de77db05ab9b33a6",
+    "protenix/model/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/model/loss.py": "368466c03c1b464ec9816f2c44920c6e4bb89dfd65512c6eccb78e762cb64ccd",
+    "protenix/model/generator.py": "822be0a1a872f7f725a2690258c676d9e5fb5510f7a92f72ef0d8c4f04db164a",
+    "protenix/model/utils.py": "d616d771624ae43eb50f60a89241f771e1e75e15dadbf3a7f81ca9611022adfc",
+    "protenix/model/triangular/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/model/triangular/triangular.py": "7bfe12741eeec1b0354e5ee7bcb78058c8e070410f0d12cb737ef7b585c27eb2",
+    "protenix/model/triangular/layers.py": "76b7e8dcf8a5bdb9dd9c1ec7b187a224b14b69dfebe040ef751569409762c391",
+    "protenix/model/layer_norm/torch_ext_compile.py": "1237b09c7a3f3494429d1dbb6547aad66a0682b199b3274e7d2e18b975ce2c1d",
+    "protenix/model/layer_norm/__init__.py": "1c21a7a0bf9787f07c68caf16dfe80c7451bc28ff138bc8510cb9e0712a4333d",
+    "protenix/model/layer_norm/layer_norm.py": "30b9a8803530a6fbdaa3c9302a7091eb04bca2d10dd2f79aa79a5efc1e4dfb8a",
+    "protenix/model/layer_norm/kernel/type_shim.h": "824a0dfdb5bfb1316187b3a3f7c10c9b41496b97259ddf84c882152ccec66a7a",
+    "protenix/model/layer_norm/kernel/compat.h": "24da65d5e0a58c6483abd60e7a6d6fca7e4abc9303f08c902975c77bdeacbc08",
+    "protenix/model/layer_norm/kernel/layer_norm_cuda_kernel.cu": "ad75251f6fabbf59bbc83637a9600204c62a20c6ac563a742694bbfc8c0c180a",
+    "protenix/model/layer_norm/kernel/layer_norm_cuda.cpp": "b03d995042fede126b1e36a8e9c9e73433a598f523ad914789d7aeaeb8ac842d",
+    "protenix/model/musa_kernels/tf32_pairformer_qkv_layout.py": "568078a917f96f5aef6b7b3ae7b6e84971607f77afa5b1a4a3b3fc8809f91abf",
+    "protenix/model/musa_kernels/runtime.py": "4e976a98af5d16d6cd164400c45277384078def30156a6b20c0aebce878535a2",
+    "protenix/model/musa_kernels/tri_attn_musa_tf32_bm128_w8.mu": "89af6dc2906f0666b62056a7edc60f17394ee69fd5867a00257b3b835c34089b",
+    "protenix/model/musa_kernels/fp32_bias_softmax.py": "be800d98e2e6e0989e84074854bfcd819040f9eba07a5f62ae9252871d42e6f5",
+    "protenix/model/musa_kernels/tf32_selective_attention.py": "79f96b2dec02f5048fb4f768e03735a1b3e02aa4c19e8ddc065c56e65dd698d2",
+    "protenix/model/musa_kernels/triangle_fusion.py": "f99593a834eef5134498751d5edf3e896362da1f9dfb3bf923ad5f4356ee2685",
+    "protenix/model/musa_kernels/tf32_batch5_softmax.py": "ec29e31d0611f92ebfc46c3fbcd823303719b3c1d82ff5827458cd8db7afd313",
+    "protenix/model/musa_kernels/tf32_confidence.py": "3977adf14c8b14a1da80819bf98aabf4239da09c25c9b339737e6c08300f4fdb",
+    "protenix/model/musa_kernels/tf32_diffusion_qkv_layout.py": "d3e55cbf4b300c2eeaa6fc1e096751afda8e3b37a78bfdd57ffcb3aecff0dd69",
+    "protenix/model/musa_kernels/precision_cdist.py": "fe6d02f90ea03c9371ff41a55c02f696a93e23ed73bdf2087fd4ce35fbb13b4f",
+    "protenix/model/tri_attention/__init__.py": "f738f69a1e4c6036957b5e852e139629bf3f3cf29a0a88220e8c1b00cb19c7eb",
+    "protenix/model/tri_attention/op.py": "951f867a1112e458a8138394112658c46a3e2dd1b6212dc5d1802a8cad5cb965",
+    "protenix/model/tri_attention/backward.py": "3a64118dbd8d0ad630421400268396af90e3fa71f89611b45afcde82feed8c47",
+    "protenix/model/tri_attention/forward.py": "8f521abf803e2c94a35a8657fec9d438e259e1cffb7bbbbf45aa4a9b83e345a4",
+    "protenix/model/tri_attention/autotune_helpers.py": "3d6b1659d5a0a4d48081030aac42f0bd15688f21e1ab09926be48fe90dcebbc8",
+    "protenix/model/tri_attention/autotune.py": "e14a2c22506f6982be8808f4c6c7cab0a0e702a3c6da3f324eaf56bef918d715",
+    "protenix/model/modules/diffusion.py": "fe57b3d10d3dc643f46c13268e2abe4f26679b79a51d6657aaaaa103ea294580",
+    "protenix/model/modules/fused_ops.py": "89d80eae7d5fd688fac7c2c3f956de943022acd486427047eb1c584b0b58cd23",
+    "protenix/model/modules/confidence.py": "1b333364c64bb730eb2a6c6f3a0b91130428fe52a54e6609c2b54da5ebbf1cb2",
+    "protenix/model/modules/primitives.py": "556e614655e5b874e93da53f27631bcb6d5bb9dd50fa4716738bff47ed5f4f83",
+    "protenix/model/modules/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/model/modules/embedders.py": "05e9e8d7bc8e9f917a6cadb3534b4b95764ea9968c19bc38d4743a29daf982f8",
+    "protenix/model/modules/frames.py": "375bc7478c566338c5bce6e325f7dd912c1865df51bc373e1b9a21477a1f80b1",
+    "protenix/model/modules/pairformer.py": "876b29a323ebf5a9929be0b8efa6b45027108640784a250e3ce446e39ccae2eb",
+    "protenix/model/modules/transformer.py": "c16a49ad2080ab330a7404ccca0e55d44ed94b8ad2f2dd40f65e7c79eb45ab69",
+    "protenix/model/modules/head.py": "5b79308417267c7072b9d220c78970d458ea44b94450e5e3f14140459331f1b4",
+    "protenix/data/constants.py": "10a526bd64e1206052c307239ff92109c245aec3d2c10e6ef0d4deae295092a4",
+    "protenix/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/data/tokenizer.py": "ad70ef6e5a0c976132ee1e96af71b8ba0d27b92ab9d9284a1c68326ca8d1a265",
+    "protenix/data/utils.py": "52b1603509d4d67aecbc2e09f52979c6f50e220819d88ccfe23a50546eea4508",
+    "protenix/data/pipeline/data_pipeline.py": "ca9638d7c1141a6bceb32d2c3dcc0173d320646991d41dc19e233bb9f017fb43",
+    "protenix/data/pipeline/__init__.py": "61b7184ce678a06c93ae88d2e1a27d00fa3621d3da15959f7b276c353e63bc2a",
+    "protenix/data/pipeline/dataset.py": "77627f39de0aadca6ed4fe955e9890a23edf8c939da4af8794df0f2347bf71b4",
+    "protenix/data/pipeline/dataloader.py": "2f6a68ba8a85c130001ecc18033722e86d99054ecc3954bb995578bb47e5cc29",
+    "protenix/data/tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/data/tools/logger.py": "147e5989c631988d2a355622f6b031a94207e5e12391994013223d21628ad0fb",
+    "protenix/data/tools/kalign.py": "df068344839cda5d89df8bffe885b8b7a19918828aa3a21622b5530c76eaa48f",
+    "protenix/data/tools/common.py": "833ceeb47c1460a1ac7bed498a536284f30e6af3e9bbf43a74cd03aefdd6c14b",
+    "protenix/data/tools/search.py": "2a33e74ddfb42d14026b2c2b219438babf9337f2e59c5754b36c9ccee7bb576c",
+    "protenix/data/tools/rewrite_biotite.py": "6cb47314d42e7aa0b413ab6bfb4c7cc0fc4712522770b7830c156722557089fe",
+    "protenix/data/core/featurizer.py": "21b8829aa46d66dd09ebdf1cecff90b91cb938aa49c39df8ed36c50ca4e5a14b",
+    "protenix/data/core/geometry_featurizer.py": "598617093850cfe02ca6b3a586f8c0749473e40a2b2c86d5d6f8a178e032498a",
+    "protenix/data/core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/data/core/parser.py": "dbbfa07a51ba82fe42bc8d539a3bd97fb19f6b42930988b66a6b40068bffea4c",
+    "protenix/data/core/substructure_perms.py": "da92fbb4fcaca716a9e7f32eff4119375e131b4684ca5a33f84c5cdcc98709a6",
+    "protenix/data/core/filter.py": "cd7bb1c57be89c4f7b2585b7320e3c2f290aabb635cda12943a17063af62af25",
+    "protenix/data/core/ccd.py": "c69019288f65cbf08ec42a9692ac8861ef506f7388d1ffb9cedc2a79ec6c3a95",
+    "protenix/data/msa/msa_featurizer.py": "cac245cd3165fc3ca2318ffa8dba0b77ac961024f09e6b3dec48d768001e8fd6",
+    "protenix/data/msa/msa_utils.py": "fbacbbdfa5afd0e17cacb9dba33f8e9e094531640ff665a285f507ecd4395918",
+    "protenix/data/msa/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/data/esm/compute_esm.py": "ce3fc45709d088ecba45fb49c8dafd4882a74401a24f7df9a91f8115091a9363",
+    "protenix/data/esm/__init__.py": "42489adb08de889bb649185121b7d86b2aed3b4ea89b1ffdaa2d8d8bdf87f413",
+    "protenix/data/esm/esm_featurizer.py": "2ac3a6fa513e84a736f14e5d2d57ad156014b5cb7e785e2ca17e6f9d896ea657",
+    "protenix/data/template/template_utils.py": "ba75f5242614e2572445ddbed8060c2f9370f6d218757b9570013ddf5ee6f3b8",
+    "protenix/data/template/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/data/template/template_parser.py": "80c02ce0e444f4b5427d0b8b749896e158b6dcbef75fc036f231840268ef3a77",
+    "protenix/data/template/template_featurizer.py": "4ca729c373915bbfc1015dc8a54505eaa7149118f9c1e810a29ae21c34b1fa96",
+    "protenix/data/inference/json_maker.py": "de9fdfc297886d924d1c207d8e1e79109087f32339c1c0ac25469bd32e8caf29",
+    "protenix/data/inference/__init__.py": "beeabcb42895075d0b6d5ab678307bbdfc87820273374dd5b685618272ecdbce",
+    "protenix/data/inference/json_to_feature.py": "2950c7406dd91902df8bcce305ba0bc79a52d55e80efa6013127aa5bae53214a",
+    "protenix/data/inference/infer_dataloader.py": "47d20b580d2d23b51e19b576b043953ed660337f13c07cfd9c06db6cc91f742a",
+    "protenix/data/inference/json_parser.py": "7382846ad09d52b19edd5161fcfcc52ef91f29b47ffb47083b2c403fa24d5c53",
+    "protenix/data/constraint/__init__.py": "9448792dbd9aa44112cb16e9cdb77cca263cd50193ab8c7761d6a51d6d0d4d29",
+    "protenix/data/constraint/constraint_featurizer.py": "a413febd327df54065dd4cc1786870f7f617f29a4e46214f9edaf472f99eaab4",
+    "protenix/web_service/colab_request_utils.py": "11cf40531d6af7b335c21846d4199033ec1964b7cb6a649e122c869238cba1e7",
+    "protenix/web_service/colab_request_parser.py": "cc22484679a3a95e20af30f2154f64a974faae7ef375de2f7801f076596acb6d",
+    "protenix/web_service/viewer.py": "d72c11014161b34e5d1fd9f77ec4e76e19264858b9db56600616f61591a68ec3",
+    "protenix/web_service/prediction_visualization.py": "a0f149784b2efaafae217c11610cab7471f85a29be61b36df1907ada1abb107c",
+    "protenix/web_service/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "protenix/web_service/dependency_url.py": "f91393e44c52aab7a555b1d80d29714d10cec026896df600cd08e0ba8d64a862"
+  },
+  "expected_absent_source_paths": [
+    "protenix/model/musa_kernels/mutlass_triangle_bmm/__init__.py",
+    "protenix/model/musa_kernels/mutlass_triangle_bmm/triangle_bmm.py",
+    "protenix/model/tri_attention/v21/__init__.py",
+    "protenix/model/tri_attention/v21/build_v21_forward_fast_p36q32_repro.sh",
+    "protenix/model/tri_attention/v21/tri_attn_musa_v21_training.mu",
+    "protenix/model/extension_loader.py",
+    "protenix/model/musa_kernels/mutlass_triangle_bmm/protenix_mutlass_triangle_bmm_v5.so",
+    "protenix/model/tri_attention/v21/libv21_training_fast_p36q32_repro.so"
+  ],
+  "required_native_dependencies": [
+    "protenix/model/layer_norm/fast_layer_norm_cuda_v2.so",
+    "protenix/model/musa_kernels/libtri_attn_musa_tf32_bm128_w8.so"
+  ],
+  "reproduction_asset_sha256": {
+    "optimizations/s5000/benchmarks/_summary_impl.py": "f455b484c102641a566b4d574cc8f79cc3ce125e0a7094075b18f73bca69fd4f",
+    "optimizations/s5000/benchmarks/audit_common.py": "43b2df4f27238758f1a083107cbee89b97a130aa6b46b6174192b4b07d1851ae",
+    "optimizations/s5000/benchmarks/run_benchmark.py": "80057a27e0fbf1f3552e14aaf96a591ce8d9638ac6791c4d1befb6b56a721caa",
+    "optimizations/s5000/benchmarks/run_delivery_validation.py": "402b5a3127966d478efc7b830476f31532ac6d1a24c32f5e1df3ef3bfaea7817",
+    "optimizations/s5000/benchmarks/run_eval21.sh": "5d50cce50587c50696e2bea7c8f09ce22536cd2c598e3b61de9ff442bc2987e0",
+    "optimizations/s5000/benchmarks/run_test23.sh": "ee1e3607867d17ba598c0a11386730675aa16338c91eed0b3a594d508bf65002",
+    "optimizations/s5000/benchmarks/runtime_audit.py": "f64b9c015ea2e93c0c641d7b885217be79bb42fcca2f7fa06ea93841acb9ea73",
+    "optimizations/s5000/benchmarks/summary.py": "aa2d89639b105bf665fe70b9b4415be14d350e4ece681c48c77715712321fded",
+    "optimizations/s5000/benchmarks/triangle_plan.json": "4bb56c95bf45c9e1c14123e1e5a3b93b635e1b621ca9d48a9ae06f26771da457",
+    "optimizations/s5000/benchmarks/validate_run.py": "901f98273617ffdecebd8f8770687a4a88559c88c5b21af2632bac2dbc274b4e",
+    "optimizations/s5000/benchmarks/verified_flags.json": "088e5be720f98e271010e5f0a91ab9c2751a495bab14027e85e1058be8e016e2",
+    "optimizations/s5000/benchmarks/verify_installation.py": "2e6f567fbb408c612a00d5e09f0ff267fd68095c1e55edc03d13466fd69d603f"
+  },
+  "optimizations": [
+    {
+      "id": 1,
+      "title": "Attention计算内核融合",
+      "commit": "4cbf324c3a91770f7a05878f8de0efc80f6a57de",
+      "report": "optimizations/s5000/reports/01.md",
+      "changed_source_paths": [
+        "protenix/model/modules/primitives.py",
+        "protenix/model/musa_kernels/tf32_confidence.py",
+        "protenix/model/musa_kernels/tri_attn_musa_tf32_bm128_w8.mu",
+        "protenix/model/triangular/layers.py"
+      ],
+      "flags": [
+        "PROTENIX_DISABLE_MUSA_BF16_SDPA",
+        "PROTENIX_ENABLE_MUSA_NATIVE_TF32_CONFIDENCE"
+      ],
+      "counters": [
+        "aligned_tf32_confidence_calls",
+        "flash_calls",
+        "std_bf16"
+      ]
+    },
+    {
+      "id": 2,
+      "title": "TriangleMultiplication融合",
+      "commit": "a3ea54a0a22ebbee509a6ab42e2967032b9da106",
+      "report": "optimizations/s5000/reports/02.md",
+      "changed_source_paths": [
+        "protenix/model/musa_kernels/triangle_fusion.py",
+        "protenix/model/triangular/triangular.py"
+      ],
+      "flags": [
+        "PROTENIX_DISABLE_MUSA_TRIANGLE_FUSION",
+        "PROTENIX_ENABLE_FP32_CONF_TRIMUL",
+        "PROTENIX_ENABLE_MUSA_TRIMUL_TILE_V2",
+        "PROTENIX_TF32_FULL_ALIGNMENT"
+      ],
+      "counters": [
+        "aligned_mul_fp32_calls",
+        "full_bf16_trimul_cache_calls",
+        "mul_output_calls",
+        "trimul_tile_v2_calls"
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Attention QKVG合并投影与权重缓存",
+      "commit": "9f14e0adb494b68653e93af22c3a92ed04e86165",
+      "report": "optimizations/s5000/reports/03.md",
+      "changed_source_paths": [
+        "protenix/model/modules/primitives.py",
+        "protenix/model/triangular/layers.py"
+      ],
+      "flags": [
+        "PROTENIX_DISABLE_MUSA_ATTENTION_QKVG_FUSION",
+        "PROTENIX_DISABLE_MUSA_TRIANGLE_QKVG",
+        "PROTENIX_ENABLE_FP32_CONF_QKVG",
+        "PROTENIX_TF32_FULL_ALIGNMENT"
+      ],
+      "counters": [
+        "aligned_qkvg_fp32_calls",
+        "full_bf16_qkvg_cache_calls",
+        "qkvg",
+        "qkvg_calls"
+      ]
+    },
+    {
+      "id": 4,
+      "title": "QKV布局与Q缩放融合",
+      "commit": "332e4345e92c9256b50a83076feec3fa7ef725fc",
+      "report": "optimizations/s5000/reports/04.md",
+      "changed_source_paths": [
+        "protenix/model/modules/primitives.py",
+        "protenix/model/musa_kernels/tf32_diffusion_qkv_layout.py",
+        "protenix/model/musa_kernels/tf32_pairformer_qkv_layout.py",
+        "protenix/model/triangular/layers.py"
+      ],
+      "flags": [
+        "PROTENIX_MUSA_DIFFUSION_QKV_LAYOUT_FUSED",
+        "PROTENIX_MUSA_QKV_LAYOUT_FUSED"
+      ],
+      "counters": [
+        "aligned_diffusion_qkv_layout_calls",
+        "aligned_qkv_layout_calls"
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Diffusion静态pair归一化与bias缓存",
+      "commit": "9652cafa6da1c3b9b2fa783a6a86a0f104ab556a",
+      "report": "optimizations/s5000/reports/05.md",
+      "changed_source_paths": [
+        "protenix/model/modules/diffusion.py",
+        "protenix/model/modules/transformer.py"
+      ],
+      "flags": [
+        "--enable_diffusion_shared_vars_cache",
+        "--enable_efficient_fusion"
+      ],
+      "counters": [
+        "pair_bias_hits",
+        "pair_cache_builds",
+        "pair_norm_hits"
+      ]
+    },
+    {
+      "id": 6,
+      "title": "多采样Diffusion条件共享",
+      "commit": "dd1a1ce12d0082d6772bbc8f1da33f6748c038f9",
+      "report": "optimizations/s5000/reports/06.md",
+      "changed_source_paths": [
+        "protenix/model/modules/diffusion.py"
+      ],
+      "flags": [],
+      "counters": [
+        "condition_share_calls"
+      ]
+    },
+    {
+      "id": 7,
+      "title": "FastLayerNorm",
+      "commit": "99ddc07bc78a7f1eaf054a9960e201679456c6ff",
+      "report": "optimizations/s5000/reports/07.md",
+      "changed_source_paths": [
+        "protenix/model/triangular/layers.py"
+      ],
+      "flags": [
+        "LAYERNORM_TYPE",
+        "PROTENIX_DISABLE_MUSA_FAST_LN"
+      ],
+      "counters": []
+    },
+    {
+      "id": 8,
+      "title": "Transition合并投影与SwiGLU融合",
+      "commit": "04bca0f8a3f0a68c14d3da3f6e1bce241cf9dda0",
+      "report": "optimizations/s5000/reports/08.md",
+      "changed_source_paths": [
+        "protenix/model/modules/primitives.py"
+      ],
+      "flags": [
+        "PROTENIX_DISABLE_MUSA_SWIGLU"
+      ],
+      "counters": [
+        "swiglu"
+      ]
+    },
+    {
+      "id": 9,
+      "title": "局部Attention批次展平",
+      "commit": "805c1ebcee5576e09809b4fb1f6d97c25796fda6",
+      "report": "optimizations/s5000/reports/09.md",
+      "changed_source_paths": [
+        "protenix/model/modules/primitives.py"
+      ],
+      "flags": [
+        "PROTENIX_DISABLE_MUSA_LOCAL_SDPA_FLATTEN",
+        "PROTENIX_TF32_FULL_ALIGNMENT"
+      ],
+      "counters": [
+        "full_fp32_local_flatten_calls"
+      ]
+    },
+    {
+      "id": 10,
+      "title": "AdaLN scale与shift合并投影",
+      "commit": "6cee0a79b9db98bc04d2447fbb28c7806e939a22",
+      "report": "optimizations/s5000/reports/10.md",
+      "changed_source_paths": [
+        "protenix/model/modules/primitives.py"
+      ],
+      "flags": [
+        "PROTENIX_DISABLE_MUSA_ADAPTIVE_LAYERNORM_FUSION"
+      ],
+      "counters": [
+        "adaln"
+      ]
+    },
+    {
+      "id": 11,
+      "title": "源mask检查缓存",
+      "commit": "99acc094cf51550bd0eb4099465851312d2b9af6",
+      "report": "optimizations/s5000/reports/11.md",
+      "changed_source_paths": [
+        "protenix/model/musa_kernels/runtime.py",
+        "protenix/model/triangular/triangular.py"
+      ],
+      "flags": [],
+      "counters": [
+        "mask_cache_hits",
+        "mask_cache_misses",
+        "mask_none_fastpath"
+      ]
+    },
+    {
+      "id": 12,
+      "title": "FP32 Bias与Softmax融合",
+      "commit": "4f6779cace21d304ca44b92cdc29cb786af704cb",
+      "report": "optimizations/s5000/reports/12.md",
+      "changed_source_paths": [
+        "protenix/model/modules/primitives.py",
+        "protenix/model/musa_kernels/fp32_bias_softmax.py",
+        "protenix/model/musa_kernels/tf32_batch5_softmax.py",
+        "protenix/model/musa_kernels/tf32_selective_attention.py",
+        "protenix/model/triangular/layers.py"
+      ],
+      "flags": [
+        "PROTENIX_MUSA_LONG_BATCH5_SOFTMAX",
+        "PROTENIX_TF32_FULL_ALIGNMENT"
+      ],
+      "counters": [
+        "aligned_batch5_softmax_calls",
+        "full_original_fp32_core_calls",
+        "full_selective_fp32_core_calls"
+      ]
+    },
+    {
+      "id": 13,
+      "title": "推理分块调度",
+      "commit": "2fe1ad0996aa7ceafecd740520c90b916c32d646",
+      "report": "optimizations/s5000/reports/13.md",
+      "changed_source_paths": [
+        "protenix/model/modules/confidence.py",
+        "protenix/model/protenix.py",
+        "protenix/model/triangular/layers.py"
+      ],
+      "flags": [
+        "FP32_DYNAMIC_CHUNK_640",
+        "PROTENIX_ENABLE_MUSA_CONFIDENCE_NOCHUNK_TF32",
+        "PROTENIX_FP32_TRIANGLE_PLAN"
+      ],
+      "counters": [
+        "aligned_chunk640_calls",
+        "aligned_confidence_nochunk_calls",
+        "fp32_triangle_plan_hits"
+      ]
+    }
+  ],
+  "support_commits": [
+    {
+      "role": "compatibility_and_precision",
+      "commit": "4144ebd3382e180ac89b02e45a43e1efcee5368a"
+    },
+    {
+      "role": "reproduction_entrypoints",
+      "commit": "6844e48dda7c9e42ebe3b5f2f3ec83cb31b47eaf"
+    },
+    {
+      "role": "delivery_index",
+      "commit": "This file belongs to the delivery index commit"
+    }
+  ],
+  "note": "Source and benchmark code only. Data, weights, native binaries, private runtime references and internal evidence are supplied separately. No new GPU run."
+}
