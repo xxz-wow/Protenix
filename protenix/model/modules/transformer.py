@@ -164,6 +164,7 @@ class AttentionPairBias(nn.Module):
         z: torch.Tensor,
         inplace_safe: bool = False,
         enable_efficient_fusion: bool = False,
+        pair_bias_cache: Optional[dict] = None,
     ) -> torch.Tensor:
         """Used by Algorithm 7/20
 
@@ -183,6 +184,17 @@ class AttentionPairBias(nn.Module):
         """
 
         # Multi-head attention bias
+        if (pair_bias_cache is not None and not torch.is_grad_enabled() and not self.training
+                and enable_efficient_fusion and z is pair_bias_cache.get("channels")):
+            biases = pair_bias_cache["biases"]
+            if self not in biases:
+                weight = (self.linear_nobias_z.weight * self.layernorm_z.weight[None, :])[:, :, None, None]
+                bias = F.conv2d(z, weight)
+                biases[self] = bias
+                STATS["pair_bias_builds"] += 1
+            else:
+                STATS["pair_bias_hits"] += 1
+            return self.attention(q_x=q, kv_x=kv, attn_bias=biases[self], inplace_safe=inplace_safe)
         if enable_efficient_fusion:
             weight = (self.linear_nobias_z.weight * self.layernorm_z.weight[None, :])[
                 :, :, None, None
@@ -209,6 +221,7 @@ class AttentionPairBias(nn.Module):
         inplace_safe: bool = False,
         chunk_size: Optional[int] = None,
         enable_efficient_fusion: bool = False,
+        pair_bias_cache: Optional[dict] = None,
     ) -> torch.Tensor:
         """Details are given in local_forward and standard_forward"""
         # Input projections
@@ -243,6 +256,7 @@ class AttentionPairBias(nn.Module):
                 z,
                 inplace_safe=inplace_safe,
                 enable_efficient_fusion=enable_efficient_fusion,
+            pair_bias_cache=pair_bias_cache,
             )
 
         # Output projection (from adaLN-Zero [27])
@@ -311,6 +325,7 @@ class DiffusionTransformerBlock(nn.Module):
         inplace_safe: bool = False,
         chunk_size: Optional[int] = None,
         enable_efficient_fusion: bool = False,
+        pair_bias_cache: Optional[dict] = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Args:
@@ -342,6 +357,7 @@ class DiffusionTransformerBlock(nn.Module):
                 inplace_safe=inplace_safe,
                 chunk_size=chunk_size,
                 enable_efficient_fusion=enable_efficient_fusion,
+            pair_bias_cache=pair_bias_cache,
             )
         )
         if inplace_safe:
@@ -411,6 +427,7 @@ class DiffusionTransformer(nn.Module):
         inplace_safe: bool = False,
         chunk_size: Optional[int] = None,
         enable_efficient_fusion: bool = False,
+        pair_bias_cache: Optional[dict] = None,
     ) -> list[Callable]:
         blocks = [
             partial(
@@ -420,6 +437,7 @@ class DiffusionTransformer(nn.Module):
                 inplace_safe=inplace_safe,
                 chunk_size=chunk_size,
                 enable_efficient_fusion=enable_efficient_fusion,
+            pair_bias_cache=pair_bias_cache,
             )
             for b in self.blocks
         ]
@@ -435,6 +453,7 @@ class DiffusionTransformer(nn.Module):
         inplace_safe: bool = False,
         chunk_size: Optional[int] = None,
         enable_efficient_fusion: bool = False,
+        pair_bias_cache: Optional[dict] = None,
     ) -> torch.Tensor:
         """
                 Args:
@@ -458,6 +477,7 @@ class DiffusionTransformer(nn.Module):
             inplace_safe=inplace_safe,
             chunk_size=chunk_size,
             enable_efficient_fusion=enable_efficient_fusion,
+            pair_bias_cache=pair_bias_cache,
         )
         blocks_per_ckpt = self.blocks_per_ckpt
         if not torch.is_grad_enabled():
