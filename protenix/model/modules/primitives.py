@@ -588,6 +588,7 @@ def _local_attention(
     use_efficient_implementation: bool = True,
     inplace_safe: bool = False,
     chunk_size: Optional[int] = None,
+    profile_times: Optional[list[tuple[str, float]]] = None,
 ) -> torch.Tensor:
     """Local attention
 
@@ -611,6 +612,17 @@ def _local_attention(
             [..., Q, d]
     """
     assert q.shape == k.shape == v.shape  # local attention doesn't make sense if Q != K
+    if profile_times is not None:
+        torch.musa.synchronize()
+        profile_start = time.perf_counter()
+
+    def profile_mark(name: str) -> None:
+        nonlocal profile_start
+        if profile_times is not None:
+            torch.musa.synchronize()
+            now = time.perf_counter()
+            profile_times.append((name, (now - profile_start) * 1000))
+            profile_start = now
 
     # Prepare for attention qkv, q: [..., n_trunks, n_queries, d], kv: [..., n_trunks, n_keys, d]
 
@@ -633,13 +645,90 @@ def _local_attention(
         attn_bias=attn_bias,
         inf=inf,
     )
+    profile_mark("local_rearrange")
 
     # Apply attention
     # [..., n_trunks, n_queries, d]
     if trunked_attn_bias is not None:
         attn_bias_trunked = attn_bias_trunked + trunked_attn_bias
+    profile_mark("local_bias_add")
 
-    if chunk_size is not None:
+    # Pure-FP32 batching only within an already protected FP32 region.
+    # The original math attention routine is kept: no SDPA dtype conversion.
+    use_fp32_flatten = (
+        chunk_size is not None and q_trunked.device.type == "musa"
+        and q_trunked.ndim == 5 and q_trunked.dtype == k_trunked.dtype == v_trunked.dtype == torch.float32
+        and not torch.is_grad_enabled() and not torch.is_autocast_enabled("musa")
+        and os.getenv("PROTENIX_ENABLE_FP32_LOCAL_FLATTEN", "0") == "1"
+        and not (torch.backends.musa.matmul.allow_tf32
+                 and os.getenv("PROTENIX_TF32_FULL_ALIGNMENT") == "1")
+    )
+    if use_fp32_flatten:
+        leading = q_trunked.shape[:-2]
+        q_flat = q_trunked.reshape(-1, n_queries, q_trunked.shape[-1])
+        k_flat = k_trunked.reshape(-1, n_keys, k_trunked.shape[-1])
+        v_flat = v_trunked.reshape(-1, n_keys, v_trunked.shape[-1])
+        bias_flat = attn_bias_trunked.expand(*leading, n_queries, n_keys).reshape(-1, n_queries, n_keys)
+        budget = int(os.getenv("PROTENIX_FP32_LOCAL_SCRATCH_MIB", "128")) * 1024 * 1024
+        assert budget > 0
+        batch = max(1, budget // (3 * n_queries * n_keys * 4))
+        parts = []
+        with torch.autocast("musa", enabled=False):
+            for start in range(0, q_flat.shape[0], batch):
+                parts.append(_attention(
+                    q_flat[start:start+batch], k_flat[start:start+batch], v_flat[start:start+batch],
+                    bias_flat[start:start+batch], use_efficient_implementation=False,
+                    inplace_safe=inplace_safe))
+        out = torch.cat(parts, dim=0) if len(parts) > 1 else parts[0]
+        out = out.reshape(*leading, n_queries, out.shape[-1])
+        out = out.reshape(*out.shape[:-3], -1, out.shape[-1])
+        if q_pad_length > 0:
+            out = out[..., :-q_pad_length, :]
+        _quick_counts["fp32_local_flatten_calls"] += 1
+        _quick_counts["fp32_local_flatten_batches"] += len(parts)
+        profile_mark("fp32_local_flatten")
+        return out
+
+    use_musa_flattened_local_sdpa = (
+        chunk_size is not None
+        and q_trunked.device.type == "musa"
+        and q_trunked.ndim == 5
+        and use_efficient_implementation
+        and os.getenv("PROTENIX_DISABLE_MUSA_LOCAL_SDPA_FLATTEN") != "1"
+        and (
+            (
+                q_trunked.dtype == torch.bfloat16
+                and os.getenv("PROTENIX_DISABLE_MUSA_BF16_SDPA") != "1"
+            )
+            or (
+                q_trunked.dtype == k_trunked.dtype == v_trunked.dtype == torch.float32
+                and not torch.is_autocast_enabled("musa")
+                and torch.backends.musa.matmul.allow_tf32
+                and os.getenv("PROTENIX_TF32_FULL_ALIGNMENT") == "1"
+            )
+        )
+    )
+    if use_musa_flattened_local_sdpa:
+        if q_trunked.dtype == torch.float32:
+            _quick_counts["full_fp32_local_flatten_calls"] += 1
+        _quick_counts["local_flatten"] += 1
+        leading_shape = q_trunked.shape[:-2]
+        n_trunks = leading_shape[-1]
+        expanded_attn_bias = attn_bias_trunked.expand(
+            *leading_shape, n_queries, n_keys
+        )
+        out = _attention(
+            q=q_trunked.reshape(-1, n_trunks, n_queries, q_trunked.shape[-1]),
+            k=k_trunked.reshape(-1, n_trunks, n_keys, k_trunked.shape[-1]),
+            v=v_trunked.reshape(-1, n_trunks, n_keys, v_trunked.shape[-1]),
+            attn_bias=expanded_attn_bias.reshape(
+                -1, n_trunks, n_queries, n_keys
+            ),
+            use_efficient_implementation=use_efficient_implementation,
+            inplace_safe=inplace_safe,
+        )
+        out = out.reshape(*leading_shape, n_queries, out.shape[-1])
+    elif chunk_size is not None:
         attn_inputs = {
             "q": q_trunked,
             "k": k_trunked,
@@ -666,12 +755,14 @@ def _local_attention(
             use_efficient_implementation=use_efficient_implementation,
             inplace_safe=inplace_safe,
         )
+    profile_mark("local_sdpa")
 
     # Revert back to orignal shape and remove q_pad_length
     # [..., n_trunks, n_queries, d] ->  [..., n_trunks * n_queries, d] ->  [..., n, d]
     out = out.reshape(*out.shape[:-3], -1, out.shape[-1])
     if q_pad_length > 0:
         out = out[..., :-q_pad_length, :]
+    profile_mark("local_output_reshape")
     return out
 
 
