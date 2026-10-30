@@ -424,6 +424,7 @@ class Attention(nn.Module):
             "torch",
             "deepspeed",
             "triattention",
+            "c500",
             "cuequivariance",
         ]
 
@@ -432,7 +433,7 @@ class Attention(nn.Module):
 
         # DeepSpeed attention kernel applies scaling internally
         q, k, v = self._prep_qkv(
-            q_x, kv_x, apply_scale=triangle_attention in ["torch", "triattention"]
+            q_x, kv_x, apply_scale=triangle_attention in ["torch", "triattention", "c500"]
         )
 
         if q.shape[-2] <= 16:
@@ -445,8 +446,8 @@ class Attention(nn.Module):
                     "provide up to two bias terms"
                 )
             o = _deepspeed_evo_attn(q, k, v, biases)
-        elif triangle_attention == "triattention":
-            o = _tri_attention(q, k, v, biases)
+        elif triangle_attention in ["triattention", "c500"]:
+            o = _tri_attention(q, k, v, biases, implementation=triangle_attention)
         elif triangle_attention == "cuequivariance":
             # Notes:
             #     (1) Context is saved for backward pass. You don't need to save it manually.
@@ -542,6 +543,7 @@ def _tri_attention(
     k: torch.Tensor,
     v: torch.Tensor,
     biases: List[torch.Tensor],
+    implementation: str = "triattention",
 ) -> torch.Tensor:
     """ ""
     Compute attention using TriAttention kernel.
@@ -556,7 +558,10 @@ def _tri_attention(
         biases:
             List of biases that broadcast to [*, H, Q, K]
     """
-    from protenix.model.tri_attention.op import TriAttentionFunction
+    if implementation == "c500":
+        from protenix.model.tri_attention.c500_backend import TriAttentionFunction
+    else:
+        from protenix.model.tri_attention.op import TriAttentionFunction
 
     def reshape_dims(x: torch.Tensor) -> torch.Tensor:
         no_batch_dims = len(x.shape[:-3])
@@ -577,7 +582,10 @@ def _tri_attention(
         k = reshape_dims(k)
         v = reshape_dims(v)
         biases = [reshape_dims(b) for b in biases]
-    o = TriAttentionFunction.apply(q, k, v, biases[0], biases[1])
+    # Bias1 是非训练的加性 mask；C500 接口要求其存储 dtype 与 Q 相同。
+    # Q 已由 _prep_qkv 缩放；Bias2 保留原 dtype 和梯度链，不在这里量化。
+    mask_bias = biases[0].to(dtype=q.dtype) if implementation == "c500" else biases[0]
+    o = TriAttentionFunction.apply(q, k, v, mask_bias, biases[1])
 
     o = o.reshape(orig_shape)
     return o
