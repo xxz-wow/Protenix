@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
 from contextlib import nullcontext
 from typing import Sequence, Union
 
@@ -53,15 +54,42 @@ def detach_if(t: torch.Tensor, detach: bool):
     return t
 
 
+def _cdist_with_grid_budget(a: torch.Tensor, b: torch.Tensor, max_pairs: int):
+    """按输出体积拆分直接距离计算，保证每次 grid.x 不超过启动上限。
+
+    CUDA direct cdist 为每个输出距离发射一个 block；当前 MACA 的该
+    路径在输出元素数达到 2**24 时拒绝启动。拆分保留直接差值/平方和，
+    不切换到矩阵乘法。批维、行维和列维均按同一容量规则处理。
+    """
+    batch_shape = torch.broadcast_shapes(a.shape[:-2], b.shape[:-2])
+    output_shape = (*batch_shape, a.shape[-2], b.shape[-2])
+    count = math.prod(output_shape)
+    if count <= max_pairs:
+        return torch.cdist(a, b, compute_mode="donot_use_mm_for_euclid_dist")
+    axis = max(range(len(output_shape)), key=lambda i: output_shape[i])
+    size = output_shape[axis]
+    chunk = max(1, max_pairs // (count // size))
+    parts = []
+    for first in range(0, size, chunk):
+        length = min(chunk, size-first)
+        left, right = a, b
+        if axis == len(batch_shape):
+            left = a.narrow(-2, first, length)
+        elif axis == len(batch_shape)+1:
+            right = b.narrow(-2, first, length)
+        else:
+            left = a.expand(*batch_shape, *a.shape[-2:]).narrow(axis, first, length)
+            right = b.expand(*batch_shape, *b.shape[-2:]).narrow(axis, first, length)
+        parts.append(_cdist_with_grid_budget(left, right, max_pairs))
+    return torch.cat(parts, dim=axis)
+
+
 def cdist(a: torch.Tensor, b: torch.Tensor = None):
-    # for tensor shape [1, 512 * 14, 3], donot_use_mm_for_euclid_dist mode costs 0.0489s,
-    # while use_mm_for_euclid_dist_if_necessary costs 0.0419s on cpu. On GPU there two costs
-    # will be neglectible. So there is no need to sacrifice accuracy for speed here.
-    return torch.cdist(
-        a,
-        b if b is not None else a,
-        compute_mode="donot_use_mm_for_euclid_dist",
-    )
+    b = a if b is None else b
+    if a.is_cuda and ("metax" in torch.__version__.lower()
+                      or getattr(torch.version, "maca", None) is not None):
+        return _cdist_with_grid_budget(a, b, (1 << 24)-1)
+    return torch.cdist(a, b, compute_mode="donot_use_mm_for_euclid_dist")
 
 
 def batch_avg_with_mask(
