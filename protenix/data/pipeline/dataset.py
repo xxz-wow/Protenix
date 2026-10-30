@@ -283,8 +283,8 @@ class BaseSingleDataset(Dataset):
             logger.info("-" * 10 + f" Dataset {self.name}" + "-" * 10)
         col1 = df["mol_1_type"].astype(str)
         col2 = df["mol_2_type"].astype(str).str.replace("nan", "intra", regex=False)
-        lo = np.asarray(np.where(col1.values <= col2.values, col1.values, col2.values), dtype=str)
-        hi = np.asarray(np.where(col1.values <= col2.values, col2.values, col1.values), dtype=str)
+        lo = np.where(col1.values <= col2.values, col1.values, col2.values)
+        hi = np.where(col1.values <= col2.values, col2.values, col1.values)
         df["mol_group_type"] = np.char.add(np.char.add(lo, "_"), hi)
 
         group_size_dict = dict(df["mol_group_type"].value_counts())

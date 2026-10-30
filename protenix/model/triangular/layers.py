@@ -415,6 +415,7 @@ class Attention(nn.Module):
             triangle_attention: Triangle attention implementation type.
                 - "torch" (default): PyTorch native implementation
                 - "triattention": Optimized tri-attention module
+                - "c500": Metax tri-attention from the external tri_attention_c500 package
                 - "deepspeed": DeepSpeed's fused attention kernel
                 - "cuequivariance": nvidia cuequivariance attention kernel
         Returns
@@ -559,7 +560,7 @@ def _tri_attention(
             List of biases that broadcast to [*, H, Q, K]
     """
     if implementation == "c500":
-        from protenix.model.tri_attention.c500_backend import TriAttentionFunction
+        from tri_attention_c500 import TriAttentionFunction
     else:
         from protenix.model.tri_attention.op import TriAttentionFunction
 
