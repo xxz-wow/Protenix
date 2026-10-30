@@ -447,8 +447,10 @@ class Attention(nn.Module):
                     "provide up to two bias terms"
                 )
             o = _deepspeed_evo_attn(q, k, v, biases)
-        elif triangle_attention in ["triattention", "c500"]:
-            o = _tri_attention(q, k, v, biases, implementation=triangle_attention)
+        elif triangle_attention == "triattention":
+            o = _tri_attention(q, k, v, biases)
+        elif triangle_attention == "c500":
+            o = _c500_tri_attention(q, k, v, biases)
         elif triangle_attention == "cuequivariance":
             # Notes:
             #     (1) Context is saved for backward pass. You don't need to save it manually.
@@ -544,7 +546,6 @@ def _tri_attention(
     k: torch.Tensor,
     v: torch.Tensor,
     biases: List[torch.Tensor],
-    implementation: str = "triattention",
 ) -> torch.Tensor:
     """ ""
     Compute attention using TriAttention kernel.
@@ -559,10 +560,7 @@ def _tri_attention(
         biases:
             List of biases that broadcast to [*, H, Q, K]
     """
-    if implementation == "c500":
-        from tri_attention_c500 import TriAttentionFunction
-    else:
-        from protenix.model.tri_attention.op import TriAttentionFunction
+    from protenix.model.tri_attention.op import TriAttentionFunction
 
     def reshape_dims(x: torch.Tensor) -> torch.Tensor:
         no_batch_dims = len(x.shape[:-3])
@@ -583,9 +581,56 @@ def _tri_attention(
         k = reshape_dims(k)
         v = reshape_dims(v)
         biases = [reshape_dims(b) for b in biases]
-    # Bias1 是非训练的加性 mask；C500 接口要求其存储 dtype 与 Q 相同。
-    # Q 已由 _prep_qkv 缩放；Bias2 保留原 dtype 和梯度链，不在这里量化。
-    mask_bias = biases[0].to(dtype=q.dtype) if implementation == "c500" else biases[0]
+    o = TriAttentionFunction.apply(q, k, v, biases[0], biases[1])
+
+    o = o.reshape(orig_shape)
+    return o
+
+
+@torch.jit.ignore
+def _c500_tri_attention(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    biases: List[torch.Tensor],
+) -> torch.Tensor:
+    """ ""
+    Compute attention using the external C500 backend.
+
+    Args:
+        q:
+            [*, H, Q, C_hidden] query data
+        k:
+            [*, H, K, C_hidden] key data
+        v:
+            [*, H, V, C_hidden] value data
+        biases:
+            List of biases that broadcast to [*, H, Q, K]
+    """
+    from tri_attention_c500 import TriAttentionFunction
+
+    def reshape_dims(x: torch.Tensor) -> torch.Tensor:
+        no_batch_dims = len(x.shape[:-3])
+        if no_batch_dims < 2:
+            return x.reshape(*((1,) * (2 - no_batch_dims) + x.shape))
+        if no_batch_dims > 2:
+            return x.reshape(*((x.shape[0], -1) + x.shape[-3:]))
+        return x
+
+    # [*, Q/K, H, C_hidden]
+    q = q.transpose(-2, -3)
+    k = k.transpose(-2, -3)
+    v = v.transpose(-2, -3)
+
+    orig_shape = q.shape
+    if len(orig_shape[:-3]) != 2:
+        q = reshape_dims(q)
+        k = reshape_dims(k)
+        v = reshape_dims(v)
+        biases = [reshape_dims(b) for b in biases]
+    # Q 已由 _prep_qkv 缩放；Bias1 是不求梯度的加性 mask。
+    # Bias2 保持原 dtype 和梯度链。
+    mask_bias = biases[0].to(dtype=q.dtype)
     o = TriAttentionFunction.apply(q, k, v, mask_bias, biases[1])
 
     o = o.reshape(orig_shape)
