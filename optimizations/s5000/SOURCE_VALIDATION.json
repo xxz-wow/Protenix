@@ -15,11 +15,23 @@
   "new_gpu_run": false,
   "new_structure_accuracy_run": false,
   "incremental_groups": [
-    "performance"
+    "performance",
+    "correctness"
   ],
   "candidate_function_contract_matches": {
     "Linear.forward": true,
     "_attention": true,
-    "FusedLayerNorm.forward": true
-  }
+    "FusedLayerNorm.forward": true,
+    "QKV.layout": true,
+    "gates.forward": true,
+    "gates.backward": true,
+    "Confidence.long_branch": true
+  },
+  "confidence_existing_branches_preserved": true,
+  "confidence_fp32_guard_priority_preserved": true,
+  "documentation_only_current_implementations": true,
+  "existing_validation_reports": [
+    "optimizations/s5000/reports/short-inference-overhead.md",
+    "optimizations/s5000/reports/long-sequence-fixes.md"
+  ]
 }

@@ -4,9 +4,9 @@
 
 一项计算优化与对应说明一个commit；兼容、复现入口、交付索引分别整理。逐项源码与提交见 `COMMIT_GUIDE.md`，当前功能与文件对应见 `OPTIMIZATION_MAPPING.md`。
 
-## v1.0.0调用开销增量
+## v1.0.0增量与长序列修复
 
-Linear、Attention和LayerNorm的推理调用开销优化，生效条件、回退开关及合成序列验证见 [短序列增量说明](reports/short-inference-overhead.md)。以下Test2.3和21 PDB入口仍使用配套v0.5.0配置。
+Linear、Attention和LayerNorm的推理调用开销优化，生效条件、回退开关及合成序列验证见 [短序列增量说明](reports/short-inference-overhead.md)。超长输入的索引与原生Attention路径修复，以及12例无显式预热结果见 [长序列修复说明](reports/long-sequence-fixes.md)。优化与修复分别对应一个提交。以下Test2.3和21 PDB入口仍使用配套v0.5.0配置。
 
 ## 环境与精度
 

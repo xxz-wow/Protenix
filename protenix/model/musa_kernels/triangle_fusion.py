@@ -12,7 +12,12 @@ import triton.language as tl
 @triton.jit
 def gates_fwd(P,A,B,R:tl.constexpr,N2:tl.constexpr,C:tl.constexpr,
               BR:tl.constexpr,BC:tl.constexpr):
-    r=tl.program_id(0)*BR+tl.arange(0,BR)
+    # Gate projections contain four C-wide planes per row.
+    # Promote before multiplying by 4*C for large pair tensors.
+    if R * (4 * C) > 2147483647:
+        r=tl.program_id(0).to(tl.int64)*BR+tl.arange(0,BR)
+    else:
+        r=tl.program_id(0)*BR+tl.arange(0,BR)
     c=tl.program_id(1)*BC+tl.arange(0,BC)
     mask=(r[:,None]<R)&(c[None,:]<C)
     off=r[:,None]*(4*C)+c[None,:]
@@ -30,7 +35,12 @@ def gates_fwd(P,A,B,R:tl.constexpr,N2:tl.constexpr,C:tl.constexpr,
 @triton.jit
 def gates_bwd(P,DA,DB,DP,R:tl.constexpr,N2:tl.constexpr,C:tl.constexpr,
               BR:tl.constexpr,BC:tl.constexpr):
-    r=tl.program_id(0)*BR+tl.arange(0,BR)
+    # Gate projections contain four C-wide planes per row.
+    # Promote before multiplying by 4*C for large pair tensors.
+    if R * (4 * C) > 2147483647:
+        r=tl.program_id(0).to(tl.int64)*BR+tl.arange(0,BR)
+    else:
+        r=tl.program_id(0)*BR+tl.arange(0,BR)
     c=tl.program_id(1)*BC+tl.arange(0,BC)
     mask=(r[:,None]<R)&(c[None,:]<C)
     off=r[:,None]*(4*C)+c[None,:]

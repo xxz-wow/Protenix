@@ -28,10 +28,18 @@
 
 ## 调用开销增量
 
-`perf(musa): 减少推理 autocast 与 LayerNorm 调用开销`对应`reports/short-inference-overhead.md`，源码为`modules/primitives.py`与`layer_norm/layer_norm.py`。它是已有计算路径的调用开销调整，单独归档。
+`e00d240`：`perf(musa): 减少推理 autocast 与 LayerNorm 调用开销`，对应`reports/short-inference-overhead.md`，源码为`modules/primitives.py`与`layer_norm/layer_norm.py`。它是已有计算路径的调用开销调整，单独归档。
 
 对应提交可查询：
 
 ```bash
 git log -1 --oneline -- optimizations/s5000/reports/short-inference-overhead.md
+```
+
+## 长序列运行修复
+
+`fix(musa): 修复超长序列索引与 Confidence Attention 路径`对应`reports/long-sequence-fixes.md`，包含QKV布局和gate的大张量索引修复、原生BF16长Confidence Attention后端选择。这是运行修复，不计为额外的计算优化项。
+
+```bash
+git log -1 --oneline -- optimizations/s5000/reports/long-sequence-fixes.md
 ```

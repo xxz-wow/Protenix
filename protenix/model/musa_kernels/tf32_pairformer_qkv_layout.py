@@ -10,7 +10,12 @@ COUNTS = Counter()
 @triton.jit
 def _qkv_layout(p, q, k, v, total: tl.constexpr, seq: tl.constexpr,
                 scale: tl.constexpr, block: tl.constexpr):
-    off = tl.program_id(0) * block + tl.arange(0, block)
+    # The packed input has four times as many elements as each Q/K/V output.
+    # Promote before multiplication so row * 512 cannot wrap at 2**31.
+    if total * 4 > 2147483647:
+        off = tl.program_id(0).to(tl.int64) * block + tl.arange(0, block)
+    else:
+        off = tl.program_id(0) * block + tl.arange(0, block)
     mask = off < total
     row = off // 128
     channel = off % 128

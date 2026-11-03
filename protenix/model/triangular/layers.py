@@ -719,6 +719,20 @@ def _tri_attention(
                 out = _attention(q,k,v,biases)
         STATS["precision_fp32_triangle_calls"] += 1
         return out.transpose(-2,-3)
+    # Large BF16 confidence attention exceeds the supported Triton autotune
+    # layouts on MUSA. Use the existing Flash backend without changing dtype.
+    if (confidence and q.device.type == "musa" and not torch.is_grad_enabled()
+            and q.dtype == k.dtype == v.dtype == torch.bfloat16
+            and q.ndim == 4 and q.shape[-3] == 4 and q.shape[-1] == 32
+            and q.shape[-2] > 2048 and len(biases) == 2
+            and (mask_all_one if mask_all_one is not None else bias_all_zeros(biases[0]))):
+        _, h, seq, _ = q.shape
+        out, _, _, _ = torch.ops.aten._scaled_dot_product_attention_flash_musa.default(
+            q.contiguous(), k.contiguous(), v.contiguous(),
+            biases[1].reshape(1, h, seq, seq).contiguous(),
+            0.0, False, False, scale=1.0)
+        STATS["confidence_bf16_long_flash_calls"] += 1
+        return out.transpose(-2, -3)
     # Main-trunk inference uses MUSA Flash; other dtypes retain the original kernel fallback.
     if q.device.type == "musa" and not torch.is_grad_enabled() and not confidence:
         supported = (q.dtype == torch.bfloat16 and k.dtype == q.dtype and v.dtype == q.dtype
