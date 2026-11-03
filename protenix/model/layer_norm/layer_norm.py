@@ -35,6 +35,7 @@ from typing import Any, Optional, Union
 
 import torch
 from torch.nn.parameter import Parameter
+from protenix.model.musa_kernels.runtime import COUNTS
 
 
 current_dir = os.path.dirname(__file__)
@@ -228,6 +229,33 @@ class FusedLayerNorm(torch.nn.Module):
             torch.nn.init.zeros_(self.bias)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        if (input.device.type == "musa" and not self.training
+                and not torch.is_grad_enabled()
+                and os.getenv("PROTENIX_SHORT_LN_DIRECT", "1") == "1"):
+            # Identical native kernels and dtype policy, without autograd context allocation.
+            d = input.dtype
+            input_ = input.contiguous()
+            weight, bias = self.weight, self.bias
+            if weight is not None and weight.dtype != d:
+                weight = weight.to(d)
+            if bias is not None and bias.dtype != d:
+                bias = bias.to(d)
+            COUNTS["short_layer_norm_direct_calls"] += 1
+            if weight is None:
+                if bias is None:
+                    return fast_layer_norm_cuda_v2.forward_none_affine(
+                        input_, self.normalized_shape, self.eps
+                    )[0]
+                return fast_layer_norm_cuda_v2.forward_with_bias_affine(
+                    input_, self.normalized_shape, bias, self.eps
+                )[0]
+            if bias is None:
+                return fast_layer_norm_cuda_v2.forward_with_weight_affine(
+                    input_, self.normalized_shape, weight, self.eps
+                )[0]
+            return fast_layer_norm_cuda_v2.forward_with_both_affine(
+                input_, self.normalized_shape, weight, bias, self.eps
+            )[0]
         return FusedLayerNormAffineFunction.apply(
             input, self.weight, self.bias, self.normalized_shape, self.eps
         )

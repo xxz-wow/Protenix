@@ -4,6 +4,10 @@
 
 一项计算优化与对应说明一个commit；兼容、复现入口、交付索引分别整理。逐项源码与提交见 `COMMIT_GUIDE.md`，当前功能与文件对应见 `OPTIMIZATION_MAPPING.md`。
 
+## v1.0.0调用开销增量
+
+Linear、Attention和LayerNorm的推理调用开销优化，生效条件、回退开关及合成序列验证见 [短序列增量说明](reports/short-inference-overhead.md)。以下Test2.3和21 PDB入口仍使用配套v0.5.0配置。
+
 ## 环境与精度
 
 | 项目 | S5000运行环境 |
@@ -76,4 +80,4 @@ python -B optimizations/s5000/tests/test_source_delivery.py
 
 检查136个最终源码摘要、13项提交与说明、退役文件不存在、复测脚本摘要及Python/Shell语法。它不需要GPU，也不验证模型结构精度。
 
-本次仅同步清理版源码和入口，没有重新跑GPU性能或结构精度实验，不把既有组合收益拆分为单项收益。8ech界面精度待确认项保留。验证边界见 `VALIDATION.md`。
+性能计时、模块数值检查和完整结构质量分别记录。8ech界面精度待确认项保留。验证边界见 `VALIDATION.md`。

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from contextlib import nullcontext
 import math
 import os
 import time
@@ -88,6 +89,15 @@ class Linear(nn.Linear):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         if self.precision is not None:
+            if (input.device.type == "musa" and not self.training
+                    and not torch.is_grad_enabled()
+                    and os.getenv("PROTENIX_SHORT_AMP_FASTPATH", "1") == "1"
+                    and input.dtype == self.precision
+                    and self.weight.dtype == self.precision
+                    and (self.bias is None or self.bias.dtype == self.precision)
+                    and not torch.is_autocast_enabled("musa")):
+                _quick_counts["short_linear_precision_fastpath"] += 1
+                return F.linear(input, self.weight, self.bias)
             input_dtype = input.dtype
             with torch.amp.autocast(input.device.type, enabled=False):
                 bias = (
@@ -420,7 +430,14 @@ def _attention(
         )
         return attn_output
 
-    with torch.amp.autocast(q.device.type, enabled=False):
+    amp_context = (
+        nullcontext()
+        if (q.device.type == "musa" and not torch.is_grad_enabled()
+            and os.getenv("PROTENIX_SHORT_AMP_FASTPATH", "1") == "1"
+            and not torch.is_autocast_enabled("musa"))
+        else torch.amp.autocast(q.device.type, enabled=False)
+    )
+    with amp_context:
         # [..., n_kv, d] -> [..., d, n_kv]
         k = k.transpose(-1, -2)
 

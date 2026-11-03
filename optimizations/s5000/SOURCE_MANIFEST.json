@@ -66,7 +66,7 @@
     "protenix/model/triangular/layers.py": "76b7e8dcf8a5bdb9dd9c1ec7b187a224b14b69dfebe040ef751569409762c391",
     "protenix/model/layer_norm/torch_ext_compile.py": "1237b09c7a3f3494429d1dbb6547aad66a0682b199b3274e7d2e18b975ce2c1d",
     "protenix/model/layer_norm/__init__.py": "1c21a7a0bf9787f07c68caf16dfe80c7451bc28ff138bc8510cb9e0712a4333d",
-    "protenix/model/layer_norm/layer_norm.py": "30b9a8803530a6fbdaa3c9302a7091eb04bca2d10dd2f79aa79a5efc1e4dfb8a",
+    "protenix/model/layer_norm/layer_norm.py": "6b894d6edd66a50ad37c6ea2abd52b2eedf9f03786fbe8f643e904b899a3598c",
     "protenix/model/layer_norm/kernel/type_shim.h": "824a0dfdb5bfb1316187b3a3f7c10c9b41496b97259ddf84c882152ccec66a7a",
     "protenix/model/layer_norm/kernel/compat.h": "24da65d5e0a58c6483abd60e7a6d6fca7e4abc9303f08c902975c77bdeacbc08",
     "protenix/model/layer_norm/kernel/layer_norm_cuda_kernel.cu": "ad75251f6fabbf59bbc83637a9600204c62a20c6ac563a742694bbfc8c0c180a",
@@ -90,7 +90,7 @@
     "protenix/model/modules/diffusion.py": "fe57b3d10d3dc643f46c13268e2abe4f26679b79a51d6657aaaaa103ea294580",
     "protenix/model/modules/fused_ops.py": "89d80eae7d5fd688fac7c2c3f956de943022acd486427047eb1c584b0b58cd23",
     "protenix/model/modules/confidence.py": "1b333364c64bb730eb2a6c6f3a0b91130428fe52a54e6609c2b54da5ebbf1cb2",
-    "protenix/model/modules/primitives.py": "556e614655e5b874e93da53f27631bcb6d5bb9dd50fa4716738bff47ed5f4f83",
+    "protenix/model/modules/primitives.py": "768521f5c24e18aa1d9fe242f3412d7ee8aa0539a66d5e414ebeebfb5666da64",
     "protenix/model/modules/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "protenix/model/modules/embedders.py": "05e9e8d7bc8e9f917a6cadb3534b4b95764ea9968c19bc38d4743a29daf982f8",
     "protenix/model/modules/frames.py": "375bc7478c566338c5bce6e325f7dd912c1865df51bc373e1b9a21477a1f80b1",
@@ -419,11 +419,30 @@
     },
     {
       "role": "delivery_index",
-      "commit": "本索引所在提交"
+      "commit": "81cc57c1fbc59526857a7095e8428d92de703d55"
     }
   ],
   "note": "Current direct-source and reproduction manifest. Data, weights, MSA and native binaries are prepared separately.",
   "expected_absent_delivery_paths": [
     "optimizations/s5000/S5000推理优化删增与归并对照报告_20261029.md"
+  ],
+  "incremental_changes": [
+    {
+      "id": "short_inference_overhead",
+      "kind": "performance",
+      "report": "optimizations/s5000/reports/short-inference-overhead.md",
+      "changed_source_paths": [
+        "protenix/model/modules/primitives.py",
+        "protenix/model/layer_norm/layer_norm.py"
+      ],
+      "flags": [
+        "PROTENIX_SHORT_AMP_FASTPATH",
+        "PROTENIX_SHORT_LN_DIRECT"
+      ],
+      "counters": [
+        "short_linear_precision_fastpath",
+        "short_layer_norm_direct_calls"
+      ]
+    }
   ]
 }

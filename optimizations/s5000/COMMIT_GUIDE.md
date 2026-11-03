@@ -22,6 +22,16 @@
 
 - MUSA兼容与精度保护：`2f6dbb5`。
 - Test2.3/21 PDB复现入口与匹配依赖说明：`493b551`。
-- 当前源码清单和索引：本文件所在的交付索引提交。
+- 源码清单和交付索引：`81cc57c`。
 
 源码文件及验证边界见`SOURCE_MANIFEST.json`和`VALIDATION.md`。组合验证收益不拆分为每项的独立收益。
+
+## 调用开销增量
+
+`perf(musa): 减少推理 autocast 与 LayerNorm 调用开销`对应`reports/short-inference-overhead.md`，源码为`modules/primitives.py`与`layer_norm/layer_norm.py`。它是已有计算路径的调用开销调整，单独归档。
+
+对应提交可查询：
+
+```bash
+git log -1 --oneline -- optimizations/s5000/reports/short-inference-overhead.md
+```

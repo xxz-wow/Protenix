@@ -13,5 +13,13 @@
   "reproduction_asset_hashes": "pass",
   "sensitive_information_scan": "pass",
   "new_gpu_run": false,
-  "new_structure_accuracy_run": false
+  "new_structure_accuracy_run": false,
+  "incremental_groups": [
+    "performance"
+  ],
+  "candidate_function_contract_matches": {
+    "Linear.forward": true,
+    "_attention": true,
+    "FusedLayerNorm.forward": true
+  }
 }

@@ -26,6 +26,8 @@ Protenix is built for high-accuracy structure prediction. It serves as an initia
 
 运行环境、匹配依赖与Test2.3/21 PDB复测入口见 [S5000说明](optimizations/s5000/README.md)，逐项源码及说明见 [提交索引](optimizations/s5000/COMMIT_GUIDE.md)。源码可直接使用；数据、权重、MSA及匹配二进制另行准备。验证边界见 [验证说明](optimizations/s5000/VALIDATION.md)。
 
+v1.0.0短序列调用开销优化及实测范围见 [增量说明](optimizations/s5000/reports/short-inference-overhead.md)。
+
 ## 🌟 Related Projects
 - **[PXDesign](https://protenix.github.io/pxdesign/)** is a model suite for de novo protein-binder design built on the Protenix foundation model. PXDesign achieves 20–73% experimental success rates across multiple targets — 2–6× higher than prior SOTA methods such as AlphaProteo and RFdiffusion. The framework is freely accessible via the Protenix Server.
 
