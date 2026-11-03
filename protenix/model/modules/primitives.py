@@ -921,14 +921,25 @@ class Attention(nn.Module):
             weight, bias = self._get_qkvg_parameters()
             projections = F.linear(q_x, weight, bias)
             projection_width = self.c_hidden * self.num_heads
-            qkv, gate = projections.split(
-                (projection_width * 3, projection_width), dim=-1
-            )
-            q, k, v = qkv.split(projection_width, dim=-1)
-            q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
-            q = q / math.sqrt(self.c_hidden)
+            if (torch.backends.musa.matmul.allow_tf32
+                    and os.getenv("PROTENIX_MUSA_DIFFUSION_QKV_LAYOUT_FUSED") == "1"
+                    and projections.dtype == torch.float32
+                    and projections.shape[-2] >= 1024
+                    and self.num_heads == 16 and self.c_hidden == 48
+                    and projection_width == 768):
+                from protenix.model.musa_kernels.tf32_diffusion_qkv_layout import qkv_layout
+                q, k, v = qkv_layout(projections, block=1024, num_warps=8)
+                gate = projections[..., projection_width * 3:]
+                _quick_counts["aligned_diffusion_qkv_layout_calls"] += 1
+            else:
+                qkv, gate = projections.split(
+                    (projection_width * 3, projection_width), dim=-1
+                )
+                q, k, v = qkv.split(projection_width, dim=-1)
+                q = q.view(q.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                k = k.view(k.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                v = v.view(v.shape[:-1] + (self.num_heads, -1)).transpose(-2, -3)
+                q = q / math.sqrt(self.c_hidden)
         else:
             q, k, v = self._prep_qkv(q_x=q_x, kv_x=kv_x, apply_scale=True)
 
