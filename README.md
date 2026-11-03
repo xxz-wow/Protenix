@@ -20,6 +20,12 @@ Protenix is built for high-accuracy structure prediction. It serves as an initia
 
 <img src="assets/protenix_predictions.gif" style="width: 100%; height: auto;" alt="Protenix predictions">
 
+## S5000推理优化分支
+
+本分支面向摩尔线程MTT S5000 / MUSA，基于开源commit `4c355be4553512f72453ecbfb65e69f4c35d1413`，在原函数中直接实现13类计算优化。保留模型原生BF16 AMP、显式FP32保护和TF32开启策略。
+
+运行环境、匹配依赖与Test2.3/21 PDB复测入口见 [S5000说明](optimizations/s5000/README.md)，逐项源码及说明见 [提交索引](optimizations/s5000/COMMIT_GUIDE.md)。源码可直接使用；数据、权重、MSA及匹配二进制另行准备。验证边界见 [验证说明](optimizations/s5000/VALIDATION.md)。
+
 ## 🌟 Related Projects
 - **[PXDesign](https://protenix.github.io/pxdesign/)** is a model suite for de novo protein-binder design built on the Protenix foundation model. PXDesign achieves 20–73% experimental success rates across multiple targets — 2–6× higher than prior SOTA methods such as AlphaProteo and RFdiffusion. The framework is freely accessible via the Protenix Server.
 

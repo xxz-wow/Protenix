@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-03",
+  "status": "pass",
+  "scope": "Offline direct-source, documentation and reproduction validation",
+  "upstream_commit": "4c355be4553512f72453ecbfb65e69f4c35d1413",
+  "source_sha256_matches": 136,
+  "absent_source_paths": 8,
+  "absent_delivery_paths": 1,
+  "calculation_categories": 13,
+  "offline_test_count": 7,
+  "python_ast": "pass",
+  "shell_syntax": "pass",
+  "reproduction_asset_hashes": "pass",
+  "sensitive_information_scan": "pass",
+  "new_gpu_run": false,
+  "new_structure_accuracy_run": false
+}
