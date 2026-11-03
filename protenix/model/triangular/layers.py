@@ -568,6 +568,15 @@ def _tri_attention(
         biases:
             List of biases that broadcast to [*, H, Q, K]
     """
+    if (confidence and q.device.type == "musa" and not torch.is_grad_enabled()
+            and q.dtype == k.dtype == v.dtype == torch.float32
+            and torch.backends.musa.matmul.allow_tf32
+            and os.getenv("PROTENIX_ENABLE_MUSA_NATIVE_TF32_CONFIDENCE") == "1"
+            and q.ndim >= 4 and q.shape[-3] == 4 and q.shape[-1] == 32
+            and len(biases) == 2):
+        from protenix.model.musa_kernels.tf32_confidence import forward
+        STATS["aligned_tf32_confidence_calls"] += 1
+        return forward(q, k, v, biases, mask_all_one=mask_all_one)
     # Preserve the protected original FP32 fallback for every other configuration.
     if q.device.type == "musa" and q.dtype == torch.float32:
         assert k.dtype == v.dtype == torch.float32
@@ -590,6 +599,21 @@ def _tri_attention(
                 out = _attention(q,k,v,biases)
         STATS["precision_fp32_triangle_calls"] += 1
         return out.transpose(-2,-3)
+    # Main-trunk inference uses MUSA Flash; other dtypes retain the original kernel fallback.
+    if q.device.type == "musa" and not torch.is_grad_enabled() and not confidence:
+        supported = (q.dtype == torch.bfloat16 and k.dtype == q.dtype and v.dtype == q.dtype
+                     and q.ndim == 4 and q.shape[-3] == 4 and q.shape[-1] == 32
+                     and len(biases) == 2)
+        if supported and (mask_all_one if mask_all_one is not None else bias_all_zeros(biases[0])):
+            n, h, seq, d = q.shape
+            out, _, _, _ = torch.ops.aten._scaled_dot_product_attention_flash_musa.default(
+                q.contiguous(), k.contiguous(), v.contiguous(),
+                biases[1].reshape(1, h, seq, seq).contiguous(),
+                0.0, False, False, scale=1.0)
+            STATS["flash_calls"] += 1
+            return out.transpose(-2, -3)
+        STATS["attention_fallback"] += 1
+        return _attention(q, k, v, biases).transpose(-2, -3)
     from protenix.model.tri_attention.op import TriAttentionFunction
 
     def reshape_dims(x: torch.Tensor) -> torch.Tensor:
