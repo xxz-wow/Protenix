@@ -363,7 +363,25 @@ def _attention(
     assert k.shape == v.shape
 
     input_dtype = q.dtype
-    full_aligned_fp32 = False
+    full_aligned_fp32 = (
+        q.device.type == "musa" and q.dtype == k.dtype == v.dtype == torch.float32
+        and not torch.is_grad_enabled()
+        and (attn_bias is None or attn_bias.dtype == torch.float32)
+        and torch.backends.musa.matmul.allow_tf32
+        and os.getenv("PROTENIX_TF32_FULL_ALIGNMENT") == "1"
+    )
+    if full_aligned_fp32:
+        _quick_counts["full_fp32_core_calls"] += 1
+        eligible = (q.ndim == 4 and q.shape[-1] == 48 and q.shape[-3] == 16
+                    and q.shape[-2] == k.shape[-2] and q.shape[-2] >= 400)
+        if eligible:
+            from protenix.model.musa_kernels.tf32_selective_attention import fused_core
+            _quick_counts["full_selective_fp32_core_calls"] += 1
+            if (attn_bias is not None and q.shape[0] == 5 and q.shape[-2] >= 1024
+                    and os.getenv("PROTENIX_MUSA_LONG_BATCH5_SOFTMAX") == "1"):
+                _quick_counts["aligned_batch5_softmax_calls"] += 1
+            return fused_core(q, k, v, attn_bias=attn_bias)
+        _quick_counts["full_original_fp32_core_calls"] += 1
     use_musa_bf16_sdpa = (
         use_efficient_implementation
         and q.device.type == "musa"
@@ -409,12 +427,32 @@ def _attention(
         # [..., n_q, d], [..., d, n_kv] -> [..., n_q, n_kv]
         attn_weights = q @ k
 
-        if attn_bias is not None:
-            if inplace_safe:
-                attn_weights += attn_bias
+        probabilities = None
+        if (input_dtype == torch.float32 and not torch.is_grad_enabled()
+                and not full_aligned_fp32
+                and os.getenv("PROTENIX_ENABLE_FP32_BIAS_SOFTMAX", "0") == "1"):
+            from protenix.model.musa_kernels.fp32_bias_softmax import bias_softmax
+            if (torch.backends.musa.matmul.allow_tf32
+                    and os.getenv("PROTENIX_MUSA_LONG_BATCH5_SOFTMAX") == "1"
+                    and attn_weights.ndim == 4 and attn_weights.shape[0] == 5
+                    and attn_weights.shape[-1] >= 1024
+                    and attn_weights.is_contiguous()
+                    and attn_bias is not None and attn_bias.is_contiguous()
+                    and tuple(attn_bias.shape) == (1, *attn_weights.shape[1:])):
+                from protenix.model.musa_kernels.tf32_batch5_softmax import softmax_bias_batch5
+                probabilities = softmax_bias_batch5(attn_weights, attn_bias, num_warps=4)
+                _quick_counts["aligned_batch5_softmax_calls"] += 1
             else:
-                attn_weights = attn_weights + attn_bias
-        attn_weights = F.softmax(attn_weights, dim=-1)
+                probabilities = bias_softmax(attn_weights, [] if attn_bias is None else [attn_bias])
+        if probabilities is None:
+            if attn_bias is not None:
+                if inplace_safe:
+                    attn_weights += attn_bias
+                else:
+                    attn_weights = attn_weights + attn_bias
+            attn_weights = F.softmax(attn_weights, dim=-1)
+        else:
+            attn_weights = probabilities
 
     # [..., n_q, n_kv], [..., n_kv, d] -> [..., n_q, d]
     attn_output = attn_weights.to(dtype=input_dtype) @ v
