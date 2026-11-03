@@ -182,6 +182,11 @@ class ConfidenceHead(nn.Module):
                 - pde_preds: Predicted PDE scores [..., N_sample, N_token, N_token, pde_bins].
                 - resolved_preds: Predicted resolved scores [..., N_sample, N_atom, 2].
         """
+        if (torch.backends.musa.matmul.allow_tf32
+                and __import__("os").getenv("PROTENIX_ENABLE_MUSA_CONFIDENCE_NOCHUNK_TF32") == "1"):
+            from protenix.model.musa_kernels.runtime import STATS
+            STATS["aligned_confidence_nochunk_calls"] += 1
+            chunk_size = None
 
 
         if self.stop_gradient:

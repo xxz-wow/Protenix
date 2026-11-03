@@ -459,6 +459,12 @@ class Protenix(nn.Module):
         Returns:
             Optional[int]: Optimal chunk_size for the given token count
         """
+        if (self.configs.enable_tf32
+                and os.getenv("FP32_DYNAMIC_CHUNK_640") == "1"
+                and 1024 < N_token <= 1536):
+            from protenix.model.musa_kernels.runtime import STATS
+            STATS["aligned_chunk640_calls"] += 1
+            return 640
 
         if not hasattr(self.configs.infer_setting, "chunk_size_thresholds"):
             return self.configs.infer_setting.chunk_size
