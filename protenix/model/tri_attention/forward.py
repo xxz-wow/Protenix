@@ -111,15 +111,6 @@ def _attention_fwd(
         order=(1, 0),
     )
 
-    bias1_ptr = tl.make_block_ptr(
-        base=Bias1 + bias1_offset,
-        shape=(S, S),
-        strides=(0, 1),
-        offsets=(s, 0),
-        block_shape=(BLOCK_M, BLOCK_N),
-        order=(1, 0),
-    )
-
     bias2_ptr = tl.make_block_ptr(
         base=Bias2 + bias2_offset,
         shape=(S, S),
@@ -147,13 +138,15 @@ def _attention_fwd(
     q = tl.load(q_ptr, boundary_check=(0, 1), padding_option="zero")
 
     offset_q = (s + tl.arange(0, BLOCK_M))[:, None] < S
-    offset_k = tl.arange(0, BLOCK_N)[None, :]
+    offset_k = tl.arange(0, BLOCK_N)
     for _ in range(tl.cdiv(S, BLOCK_N)):
         k = tl.load(k_ptr, boundary_check=(0, 1), padding_option="zero")
-        bias1 = tl.load(bias1_ptr, boundary_check=(0, 1), padding_option="zero")
+        bias1 = tl.load(
+            Bias1 + bias1_offset + offset_k, mask=offset_k < S, other=0.0
+        )
         bias2 = tl.load(bias2_ptr, boundary_check=(0, 1), padding_option="zero")
-        mask = offset_q * (offset_k < S)
-        qk = bias1.to(tl.float32) + bias2.to(tl.float32)
+        mask = offset_q * (offset_k[None, :] < S)
+        qk = bias1[None, :].to(tl.float32) + bias2.to(tl.float32)
         qk = (
             tl.dot(
                 q, tl.trans(k), qk, input_precision="ieee" if deterministic else "tf32"
@@ -177,7 +170,6 @@ def _attention_fwd(
 
         k_ptr = tl.advance(k_ptr, (BLOCK_N, 0))
         v_ptr = tl.advance(v_ptr, (BLOCK_N, 0))
-        bias1_ptr = tl.advance(bias1_ptr, (0, BLOCK_N))
         bias2_ptr = tl.advance(bias2_ptr, (0, BLOCK_N))
         offset_k += BLOCK_N
 

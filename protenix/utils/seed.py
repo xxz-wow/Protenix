@@ -18,12 +18,14 @@ import random
 import numpy as np
 import torch
 
+from protenix.utils.accelerator import accelerator_manual_seed_all
+
 
 def seed_everything(seed, deterministic):
     random.seed(seed)
     np.random.seed(seed)
     torch.random.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    accelerator_manual_seed_all(seed)
     if deterministic:
         torch.backends.cudnn.benchmark = False
         # torch.backends.cudnn.deterministic=True applies to CUDA convolution operations, and nothing else.

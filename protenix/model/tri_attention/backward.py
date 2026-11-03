@@ -111,6 +111,7 @@ def _attention_bwd_dkdv(
     deterministic: tl.constexpr,
     BLOCK_M: tl.constexpr,
     BLOCK_N: tl.constexpr,
+    HAS_BIAS1: tl.constexpr = True,
 ):
 
     input_dtype = Q.dtype.element_ty
@@ -185,14 +186,15 @@ def _attention_bwd_dkdv(
         order=(0, 1),
     )
 
-    bias1_ptr = tl.make_block_ptr(
-        base=Bias1 + bias1_offset,
-        shape=(S, S),
-        strides=(0, 1),
-        offsets=(0, s),
-        block_shape=(BLOCK_N, BLOCK_M),
-        order=(1, 0),
-    )
+    if HAS_BIAS1:
+        bias1_ptr = tl.make_block_ptr(
+            base=Bias1 + bias1_offset,
+            shape=(S, S),
+            strides=(0, 1),
+            offsets=(0, s),
+            block_shape=(BLOCK_N, BLOCK_M),
+            order=(1, 0),
+        )
 
     bias2_ptr = tl.make_block_ptr(
         base=Bias2 + bias2_offset,
@@ -235,14 +237,17 @@ def _attention_bwd_dkdv(
         q = tl.load(
             q_ptr, boundary_check=(0, 1), padding_option="zero"
         )  # (BLOCK_N, HEAD_DIM)
-        bias1 = tl.load(
-            bias1_ptr, boundary_check=(0, 1), padding_option="zero"
-        )  # (BLOCK_N, BLOCK_M)
         bias2 = tl.load(
             bias2_ptr, boundary_check=(0, 1), padding_option="zero"
         )  # (BLOCK_N, BLOCK_M)
         m = tl.load(m_ptr, boundary_check=(0, 1), padding_option="zero")  # (BLOCK_N, 1)
-        qk = bias1.to(tl.float32) + bias2.to(tl.float32)
+        if HAS_BIAS1:
+            bias1 = tl.load(
+                bias1_ptr, boundary_check=(0, 1), padding_option="zero"
+            )  # (BLOCK_N, BLOCK_M)
+            qk = bias1.to(tl.float32) + bias2.to(tl.float32)
+        else:
+            qk = bias2.to(tl.float32)
         qk = (
             tl.dot(
                 q, tl.trans(k), qk, input_precision="ieee" if deterministic else "tf32"
@@ -275,7 +280,8 @@ def _attention_bwd_dkdv(
 
         q_ptr = tl.advance(q_ptr, (BLOCK_N, 0))
         do_ptr = tl.advance(do_ptr, (BLOCK_N, 0))
-        bias1_ptr = tl.advance(bias1_ptr, (BLOCK_N, 0))
+        if HAS_BIAS1:
+            bias1_ptr = tl.advance(bias1_ptr, (BLOCK_N, 0))
         bias2_ptr = tl.advance(bias2_ptr, (BLOCK_N, 0))
         m_ptr = tl.advance(m_ptr, (BLOCK_N, 0))
         delta_ptr = tl.advance(delta_ptr, (BLOCK_N, 0))
@@ -306,6 +312,7 @@ def _attention_bwd_dq(
     deterministic: tl.constexpr,
     BLOCK_M: tl.constexpr,
     BLOCK_N: tl.constexpr,
+    HAS_BIAS1: tl.constexpr = True,
 ):
 
     input_dtype = Q.dtype.element_ty
@@ -371,14 +378,15 @@ def _attention_bwd_dq(
         order=(0, 1),
     )
 
-    bias1_ptr = tl.make_block_ptr(
-        base=Bias1 + bias1_offset,
-        shape=(S, S),
-        strides=(0, 1),
-        offsets=(s, 0),
-        block_shape=(BLOCK_M, BLOCK_N),
-        order=(1, 0),
-    )
+    if HAS_BIAS1:
+        bias1_ptr = tl.make_block_ptr(
+            base=Bias1 + bias1_offset,
+            shape=(S, S),
+            strides=(0, 1),
+            offsets=(s, 0),
+            block_shape=(BLOCK_M, BLOCK_N),
+            order=(1, 0),
+        )
 
     bias2_ptr = tl.make_block_ptr(
         base=Bias2 + bias2_offset,
@@ -417,10 +425,15 @@ def _attention_bwd_dq(
     qk_scale = 1.4426950408889634
     for _ in range(tl.cdiv(S, BLOCK_N)):
         k = tl.load(k_ptr, boundary_check=(0, 1), padding_option="zero")
-        bias1 = tl.load(bias1_ptr, boundary_check=(0, 1), padding_option="zero")
         bias2 = tl.load(bias2_ptr, boundary_check=(0, 1), padding_option="zero")
 
-        qk = bias1.to(tl.float32) + bias2.to(tl.float32)
+        if HAS_BIAS1:
+            bias1 = tl.load(
+                bias1_ptr, boundary_check=(0, 1), padding_option="zero"
+            )
+            qk = bias1.to(tl.float32) + bias2.to(tl.float32)
+        else:
+            qk = bias2.to(tl.float32)
         qk = (
             tl.dot(
                 q, tl.trans(k), qk, input_precision="ieee" if deterministic else "tf32"
@@ -445,7 +458,8 @@ def _attention_bwd_dq(
 
         k_ptr = tl.advance(k_ptr, (BLOCK_N, 0))
         v_ptr = tl.advance(v_ptr, (BLOCK_N, 0))
-        bias1_ptr = tl.advance(bias1_ptr, (0, BLOCK_N))
+        if HAS_BIAS1:
+            bias1_ptr = tl.advance(bias1_ptr, (0, BLOCK_N))
         bias2_ptr = tl.advance(bias2_ptr, (0, BLOCK_N))
     tl.store(dq_ptr, dq.to(input_dtype), boundary_check=(0, 1))
 
@@ -473,6 +487,7 @@ def _attention_bwd_dbias2(
     deterministic: tl.constexpr,
     BLOCK_M: tl.constexpr,
     BLOCK_N: tl.constexpr,
+    HAS_BIAS1: tl.constexpr = True,
 ):
 
     input_dtype = Q.dtype.element_ty
@@ -553,14 +568,15 @@ def _attention_bwd_dbias2(
             order=(1, 0),
         )
 
-        bias1_ptr = tl.make_block_ptr(
-            base=Bias1 + bias1_offset + n * S,
-            shape=(S, S),
-            strides=(0, 1),
-            offsets=(s1, s2),
-            block_shape=(BLOCK_M, BLOCK_N),
-            order=(1, 0),
-        )
+        if HAS_BIAS1:
+            bias1_ptr = tl.make_block_ptr(
+                base=Bias1 + bias1_offset + n * S,
+                shape=(S, S),
+                strides=(0, 1),
+                offsets=(s1, s2),
+                block_shape=(BLOCK_M, BLOCK_N),
+                order=(1, 0),
+            )
 
         m_ptr = tl.make_block_ptr(
             base=M + delta_m_offset + n * S * H,
@@ -586,9 +602,13 @@ def _attention_bwd_dbias2(
         do = tl.load(do_ptr, boundary_check=(0, 1), padding_option="zero")
         delta = tl.load(delta_ptr, boundary_check=(0, 1), padding_option="zero")
         m = tl.load(m_ptr, boundary_check=(0, 1), padding_option="zero")
-        bias1 = tl.load(bias1_ptr, boundary_check=(0, 1), padding_option="zero")
-
-        qk = bias1.to(tl.float32) + bias2.to(tl.float32)
+        if HAS_BIAS1:
+            bias1 = tl.load(
+                bias1_ptr, boundary_check=(0, 1), padding_option="zero"
+            )
+            qk = bias1.to(tl.float32) + bias2.to(tl.float32)
+        else:
+            qk = bias2.to(tl.float32)
         qk = (
             tl.dot(
                 q, tl.trans(k), qk, input_precision="ieee" if deterministic else "tf32"

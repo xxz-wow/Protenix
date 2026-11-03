@@ -17,8 +17,11 @@ from typing import Sequence, Union
 
 import numpy as np
 import torch
+from protenix.model.musa_kernels.precision_cdist import cdist as precision_cdist
 from torch import nn
 from torch.nn.parameter import Parameter
+
+from protenix.utils.accelerator import accelerator_name
 
 
 def grad_norm(params):
@@ -57,7 +60,7 @@ def cdist(a: torch.Tensor, b: torch.Tensor = None):
     # for tensor shape [1, 512 * 14, 3], donot_use_mm_for_euclid_dist mode costs 0.0489s,
     # while use_mm_for_euclid_dist_if_necessary costs 0.0419s on cpu. On GPU there two costs
     # will be neglectible. So there is no need to sacrifice accuracy for speed here.
-    return torch.cdist(
+    return precision_cdist(
         a,
         b if b is not None else a,
         compute_mode="donot_use_mm_for_euclid_dist",
@@ -199,9 +202,10 @@ def round_values(data, recursive=True):
 def autocasting_disable_decorator(disable_casting):
     def func_wrapper(func):
         def new_func(*args, **kwargs):
+            device_type = accelerator_name()
             _amp_context = (
-                torch.autocast(device_type="cuda", enabled=False)
-                if disable_casting
+                torch.autocast(device_type=device_type, enabled=False)
+                if disable_casting and device_type is not None
                 else nullcontext()
             )
 

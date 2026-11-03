@@ -18,7 +18,6 @@ import time
 import traceback
 import urllib.request
 from argparse import Namespace
-from contextlib import nullcontext
 from os.path import exists as opexists, join as opjoin
 from typing import Any, Mapping
 
@@ -36,6 +35,16 @@ from protenix.config.config import parse_configs, parse_sys_args
 from protenix.data.inference.infer_dataloader import get_inference_dataloader
 from protenix.model.protenix import Protenix
 from protenix.utils.distributed import DIST_WRAPPER
+from protenix.utils.accelerator import (
+    accelerator_autocast,
+    accelerator_device,
+    accelerator_device_count,
+    accelerator_empty_cache,
+    accelerator_name,
+    accelerator_set_device,
+    distributed_backend,
+    visible_devices_env,
+)
 from protenix.utils.seed import seed_everything
 from protenix.utils.torch_utils import to_device
 from protenix.web_service.dependency_url import URL
@@ -92,21 +101,24 @@ class InferenceRunner(object):
             f"Distributed environment: world size: {DIST_WRAPPER.world_size}, "
             f"global rank: {DIST_WRAPPER.rank}, local rank: {DIST_WRAPPER.local_rank}"
         )
-        self.use_cuda = torch.cuda.device_count() > 0
-        if self.use_cuda:
-            self.device = torch.device(f"cuda:{DIST_WRAPPER.local_rank}")
-            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-            all_gpu_ids = ",".join(str(x) for x in range(torch.cuda.device_count()))
-            devices = os.getenv("CUDA_VISIBLE_DEVICES", all_gpu_ids)
+        self.accelerator = accelerator_name()
+        self.use_cuda = self.accelerator == "cuda"
+        if self.accelerator is not None:
+            self.device = accelerator_device(DIST_WRAPPER.local_rank)
+            if self.use_cuda:
+                os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            all_gpu_ids = ",".join(str(x) for x in range(accelerator_device_count()))
+            visible_env = visible_devices_env()
+            devices = os.getenv(visible_env, all_gpu_ids)
             logging.info(
-                f"LOCAL_RANK: {DIST_WRAPPER.local_rank} - CUDA_VISIBLE_DEVICES: [{devices}]"
+                f"LOCAL_RANK: {DIST_WRAPPER.local_rank} - {visible_env}: [{devices}]"
             )
-            torch.cuda.set_device(self.device)
+            accelerator_set_device(self.device)
         else:
             self.device = torch.device("cpu")
 
         if DIST_WRAPPER.world_size > 1:
-            dist.init_process_group(backend="nccl")
+            dist.init_process_group(backend=distributed_backend())
 
         if self.configs.triangle_attention == "deepspeed":
             env = os.getenv("CUTLASS_PATH", None)
@@ -220,11 +232,7 @@ class InferenceRunner(object):
             "fp16": torch.float16,
         }[self.configs.dtype]
 
-        enable_amp = (
-            torch.autocast(device_type="cuda", dtype=eval_precision)
-            if torch.cuda.is_available()
-            else nullcontext()
-        )
+        enable_amp = accelerator_autocast(eval_precision)
 
         data = to_device(data, self.device)
         with enable_amp:
@@ -531,6 +539,15 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
         runner (InferenceRunner): The initialized runner instance.
         configs (Any): Inference configurations.
     """
+    # Optional benchmark accounting; ordinary inference needs no wrapper installation.
+    from pathlib import Path
+    from protenix.model.musa_kernels.runtime import COUNTS, STATS
+    timing_dir = Path(os.environ["S5000_RUN_DIR"]) if os.getenv("S5000_RUN_DIR") else None
+    rows = []
+    infer_start = time.perf_counter()
+    if timing_dir:
+        timing_dir.mkdir(parents=True, exist_ok=True)
+
     # Data loading
     logger.info(f"Loading data from {configs.input_json_path}")
     with open(configs.input_json_path, "r", encoding="utf-8") as f:
@@ -565,7 +582,14 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
     for seed in seeds:
         seed_everything(seed=seed, deterministic=configs.deterministic)
         t1_start = time.time()
-        for batch in dataloader:
+        iterator = iter(dataloader)
+        while True:
+            iteration_start = time.perf_counter()
+            try:
+                batch = next(iterator)
+            except StopIteration:
+                break
+            counts_before = dict(COUNTS)
             sample_name = "unknown"
             try:
                 t2_start = time.time()
@@ -619,7 +643,7 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                     f"Model forward time: {t2_end - t2_start:.2f}s. "
                     f"Results saved to {configs.dump_dir}"
                 )
-                torch.cuda.empty_cache()
+                accelerator_empty_cache()
             except Exception as e:
                 error_message = (
                     f"[Rank {DIST_WRAPPER.rank}] {sample_name} failed: {e}\n"
@@ -632,7 +656,16 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                     encoding="utf-8",
                 ) as f:
                     f.write(error_message)
-                torch.cuda.empty_cache()
+                accelerator_empty_cache()
+            finally:
+                if timing_dir:
+                    torch.musa.synchronize()
+                    shape = {k: int(data[k].item()) for k in ("N_asym", "N_token", "N_atom", "N_msa")}
+                    rows.append(dict(name=sample_name, warm=sample_name.endswith("_warm"),
+                        iteration_wall_seconds=time.perf_counter()-iteration_start,
+                        shape=shape, data_error=data_error_message,
+                        counts={k: COUNTS[k]-counts_before.get(k, 0) for k in COUNTS}))
+                    (timing_dir / "iteration_timings.json").write_text(json.dumps(rows, indent=2))
         t1_end = time.time()
         logger.info(
             f"[Rank {DIST_WRAPPER.rank}] Seed {seed} completed in {t1_end - t1_start:.2f}s."
@@ -649,6 +682,18 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
     logger.info(
         f"[Rank {DIST_WRAPPER.rank}] Job completed in {t0_end - t0_start:.2f}s."
     )
+
+    if timing_dir:
+        elapsed = time.perf_counter() - infer_start
+        warm = sum(r["iteration_wall_seconds"] for r in rows if r["warm"])
+        formal = sum(r["iteration_wall_seconds"] for r in rows if not r["warm"])
+        (timing_dir / "wall_timing.json").write_text(json.dumps(dict(
+            infer_function_wall_seconds=elapsed, warm_iteration_seconds=warm,
+            formal_iteration_seconds=formal, wall_excluding_warm_seconds=elapsed-warm,
+            formal_count=sum(not r["warm"] for r in rows), warm_count=sum(r["warm"] for r in rows)), indent=2))
+        stats = dict(STATS)
+        stats.update(counts=dict(COUNTS), implementation="direct_model_source")
+        (timing_dir / "optimization_stats.json").write_text(json.dumps(stats, indent=2))
 
 
 def main(configs: Any) -> None:

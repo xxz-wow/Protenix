@@ -1,3 +1,4 @@
+import os
 # Copyright 2024 ByteDance and/or its affiliates.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -96,7 +97,15 @@ class Protenix(nn.Module):
     def __init__(self, configs: Any) -> None:
         super(Protenix, self).__init__()
         self.configs = configs
-        torch.backends.cuda.matmul.allow_tf32 = self.configs.enable_tf32
+        enable_tf32 = bool(configs.enable_tf32)
+        torch.backends.cuda.matmul.allow_tf32 = enable_tf32
+        if hasattr(torch.backends, "musa"):
+            torch.backends.musa.matmul.allow_tf32 = enable_tf32
+        torch.set_float32_matmul_precision("high" if enable_tf32 else "highest")
+        if hasattr(torch.backends, "mudnn"):
+            torch.backends.mudnn.allow_tf32 = enable_tf32
+        if hasattr(torch.backends, "cudnn"):
+            torch.backends.cudnn.allow_tf32 = enable_tf32
         # Some constants
         self.enable_diffusion_shared_vars_cache = (
             self.configs.enable_diffusion_shared_vars_cache
@@ -450,6 +459,7 @@ class Protenix(nn.Module):
         Returns:
             Optional[int]: Optimal chunk_size for the given token count
         """
+
         if not hasattr(self.configs.infer_setting, "chunk_size_thresholds"):
             return self.configs.infer_setting.chunk_size
 

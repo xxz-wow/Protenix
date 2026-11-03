@@ -636,7 +636,7 @@ def protenix_cli() -> None:
     type=str,
     default="cuequivariance",
     help=(
-        "Triangle attention kernel ('triattention', 'cuequivariance', "
+        "Triangle attention kernel ('triattention', 'cuequivariance', 'musa_flash_no_padding', "
         "'deepspeed', or 'torch')."
     ),
 )
@@ -868,7 +868,13 @@ def predict(
         "cuequivariance",
         "torch",
     ], "Invalid trimul_kernel. Options: 'cuequivariance', 'torch'."
-    assert triatt_kernel in ["triattention", "cuequivariance", "deepspeed", "torch",], (
+    assert triatt_kernel in [
+        "triattention",
+        "cuequivariance",
+        "deepspeed",
+        "torch",
+        "musa_flash_no_padding",
+    ], (
         "Invalid triatt_kernel. Options: 'triattention', "
         "'cuequivariance', 'deepspeed', 'torch'."
     )

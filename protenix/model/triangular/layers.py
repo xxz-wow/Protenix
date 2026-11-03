@@ -15,12 +15,14 @@
 
 import math
 import os
+import os
 from functools import partial, partialmethod
 from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
+from protenix.model.musa_kernels.runtime import COUNTS, STATS, bias_all_zeros
 from scipy.stats import truncnorm
 
 from protenix.model.utils import (
@@ -177,7 +179,7 @@ class OpenfoldLinear(nn.Linear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         d = input.dtype
         if self.precision is not None:
-            with torch.amp.autocast("cuda", enabled=False):
+            with torch.amp.autocast(input.device.type, enabled=False):
                 bias = (
                     self.bias.to(dtype=self.precision)
                     if self.bias is not None
@@ -190,11 +192,12 @@ class OpenfoldLinear(nn.Linear):
                 ).to(dtype=d)
 
         if d is torch.bfloat16:
-            with torch.amp.autocast("cuda", enabled=False):
+            with torch.amp.autocast(input.device.type, enabled=False):
                 bias = self.bias.to(dtype=d) if self.bias is not None else None
                 return nn.functional.linear(input, self.weight.to(dtype=d), bias)
 
         return nn.functional.linear(input, self.weight, self.bias)
+
 
 
 class OpenFoldLayerNorm(nn.Module):
@@ -224,7 +227,7 @@ class OpenFoldLayerNorm(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         d = x.dtype
         if d is torch.bfloat16:
-            with torch.amp.autocast("cuda", enabled=False):
+            with torch.amp.autocast(x.device.type, enabled=False):
                 out = nn.functional.layer_norm(
                     x,
                     self.c_in,
@@ -264,7 +267,7 @@ def softmax_no_cast(t: torch.Tensor, dim: int = -1) -> torch.Tensor:
     """
     d = t.dtype
     if d is torch.bfloat16:
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.amp.autocast(t.device.type, enabled=False):
             s = torch.nn.functional.softmax(t, dim=dim)
     else:
         s = torch.nn.functional.softmax(t, dim=dim)
@@ -287,7 +290,6 @@ def _attention(
 
     for b in biases:
         a += b
-
     a = softmax_no_cast(a, -1)
 
     # [*, H, Q, C_hidden]
@@ -417,6 +419,7 @@ class Attention(nn.Module):
                 - "triattention": Optimized tri-attention module
                 - "deepspeed": DeepSpeed's fused attention kernel
                 - "cuequivariance": nvidia cuequivariance attention kernel
+                - "musa_flash_no_padding": MUSA Flash forward with Triton backward
         Returns
             [*, Q, C_q] attention update
         """
@@ -425,6 +428,7 @@ class Attention(nn.Module):
             "deepspeed",
             "triattention",
             "cuequivariance",
+            "musa_flash_no_padding",
         ]
 
         if biases is None:
@@ -432,7 +436,10 @@ class Attention(nn.Module):
 
         # DeepSpeed attention kernel applies scaling internally
         q, k, v = self._prep_qkv(
-            q_x, kv_x, apply_scale=triangle_attention in ["torch", "triattention"]
+            q_x,
+            kv_x,
+            apply_scale=triangle_attention
+            in ["torch", "triattention", "musa_flash_no_padding"],
         )
 
         if q.shape[-2] <= 16:
@@ -446,7 +453,10 @@ class Attention(nn.Module):
                 )
             o = _deepspeed_evo_attn(q, k, v, biases)
         elif triangle_attention == "triattention":
-            o = _tri_attention(q, k, v, biases)
+            o = _tri_attention(q, k, v, biases, confidence=getattr(self, "_musa_confidence", False),
+                                  mask_all_one=getattr(self, "_musa_mask_all_one", None))
+        elif triangle_attention == "musa_flash_no_padding":
+            o = _musa_flash_attention_no_padding(q, k, v, biases[1])
         elif triangle_attention == "cuequivariance":
             # Notes:
             #     (1) Context is saved for backward pass. You don't need to save it manually.
@@ -542,6 +552,8 @@ def _tri_attention(
     k: torch.Tensor,
     v: torch.Tensor,
     biases: List[torch.Tensor],
+    confidence: bool = False,
+    mask_all_one: Optional[bool] = None,
 ) -> torch.Tensor:
     """ ""
     Compute attention using TriAttention kernel.
@@ -556,6 +568,28 @@ def _tri_attention(
         biases:
             List of biases that broadcast to [*, H, Q, K]
     """
+    # Preserve the protected original FP32 fallback for every other configuration.
+    if q.device.type == "musa" and q.dtype == torch.float32:
+        assert k.dtype == v.dtype == torch.float32
+        with torch.autocast("musa", enabled=False):
+            if q.ndim == 4:
+                parts = []
+                requested_rows = 16
+                assert requested_rows in (8, 16, 32, 64, 128)
+                # Bound the two full FP32 logits/probability tensors by shape.
+                budget = 2 * 1024**3
+                rows = min(requested_rows, max(1, budget // (2*q.shape[-3]*q.shape[-2]*k.shape[-2]*4)))
+                STATS["fp32_triangle_entry_calls"] += 1
+                for start in range(0, q.shape[0], rows):
+                    width = min(rows, q.shape[0]-start)
+                    STATS["fp32_triangle_chunk_calls"] += 1
+                    bs = [b.narrow(0,start,width) if b.ndim == 4 and b.shape[0] == q.shape[0] else b for b in biases]
+                    parts.append(_attention(q[start:start+width], k[start:start+width], v[start:start+width], bs))
+                out = torch.cat(parts,dim=0)
+            else:
+                out = _attention(q,k,v,biases)
+        STATS["precision_fp32_triangle_calls"] += 1
+        return out.transpose(-2,-3)
     from protenix.model.tri_attention.op import TriAttentionFunction
 
     def reshape_dims(x: torch.Tensor) -> torch.Tensor:
@@ -581,6 +615,35 @@ def _tri_attention(
 
     o = o.reshape(orig_shape)
     return o
+
+
+@torch.jit.ignore
+def _musa_flash_attention_no_padding(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    triangle_bias: torch.Tensor,
+) -> torch.Tensor:
+    from protenix.model.tri_attention.op import MusaFlashTriAttentionFunction
+
+    def reshape_dims(x: torch.Tensor) -> torch.Tensor:
+        no_batch_dims = len(x.shape[:-3])
+        if no_batch_dims < 2:
+            return x.reshape(*((1,) * (2 - no_batch_dims) + x.shape))
+        if no_batch_dims > 2:
+            return x.reshape(*((x.shape[0], -1) + x.shape[-3:]))
+        return x
+
+    q = q.transpose(-2, -3)
+    k = k.transpose(-2, -3)
+    v = v.transpose(-2, -3)
+    orig_shape = q.shape
+    q = reshape_dims(q)
+    k = reshape_dims(k)
+    v = reshape_dims(v)
+    triangle_bias = reshape_dims(triangle_bias)
+    output = MusaFlashTriAttentionFunction.apply(q, k, v, triangle_bias)
+    return output.reshape(orig_shape)
 
 
 def cuequivariance_triangular_attn(
@@ -780,8 +843,8 @@ class OuterProductMean(nn.Module):
         chunk_size: Optional[int] = None,
         inplace_safe: bool = False,
     ) -> torch.Tensor:
-        if is_fp16_enabled():
-            with torch.amp.autocast("cuda", enabled=False):
+        if is_fp16_enabled(m.device.type):
+            with torch.amp.autocast(m.device.type, enabled=False):
                 return self._forward(m.float(), mask, chunk_size, inplace_safe)
         else:
             return self._forward(m, mask, chunk_size, inplace_safe)

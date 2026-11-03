@@ -341,7 +341,7 @@ class AtomPermutation(object):
         else:
             expand_func = lambda x: x
 
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.amp.autocast(pred_coord.device.type, enabled=False):
             aligned_rmsd, transformed_pred_coord, _, _ = self_aligned_rmsd(
                 pred_pose=pred_coord.to(torch.float32),
                 true_pose=expand_func(true_coord.to(torch.float32)),
@@ -455,7 +455,7 @@ class AtomPermutation(object):
             permuted_coord_mask = expand_at_dim(permuted_coord_mask, dim=0, n=Batch)
 
         # Compute per-residue rmsd
-        with torch.amp.autocast("cuda", enabled=False):
+        with torch.amp.autocast(pred_coord.device.type, enabled=False):
             per_res_rmsd = rmsd(
                 pred_pose=pred_coord.to(torch.float32),
                 true_pose=permuted_coord.to(torch.float32),

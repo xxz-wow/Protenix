@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from contextlib import nullcontext
 from typing import Optional
 
 import torch
@@ -97,33 +98,51 @@ def align_pred_to_true(
         (pred_pose_centered * weight.unsqueeze(-1)).transpose(-2, -1),
         true_pose_centered * atom_mask.unsqueeze(-1),
     )
-    u, s, vh = torch.linalg.svd(H_mat)
-    u = u.transpose(-1, -2)
-    v = vh.transpose(-1, -2)
-
-    if not allowing_reflection:
-
-        det = torch.linalg.det(torch.matmul(v, u))
-
-        diagonal = torch.stack(
-            [torch.ones_like(det), torch.ones_like(det), det], dim=-1
-        )
-        rot = torch.matmul(
-            torch.diag_embed(diagonal).to(u.device),
-            u,
-        )
-        rot = torch.matmul(v, rot)
-    else:
-        rot = torch.matmul(v, u)
-    translate = true_pose_centroid - torch.matmul(
-        pred_pose_centroid, rot.transpose(-1, -2)
+    # SVD is both more stable in FP32 and unavailable for BF16 on the CPU
+    # fallback used by the current MUSA backend. Disable the active device's
+    # autocast locally so explicit FP32 is preserved even when this helper is
+    # called from a BF16 training region.
+    output_dtype = pred_pose.dtype
+    device_type = pred_pose.device.type
+    autocast_context = (
+        torch.autocast(device_type=device_type, enabled=False)
+        if device_type in ("cuda", "musa")
+        else nullcontext()
     )
+    with autocast_context:
+        H_mat = H_mat.float()
+        u, s, vh = torch.linalg.svd(H_mat)
+        u = u.transpose(-1, -2)
+        v = vh.transpose(-1, -2)
 
-    pred_pose_translated = (
-        torch.matmul(pred_pose_centered, rot.transpose(-1, -2)) + true_pose_centroid
+        if not allowing_reflection:
+            det = torch.linalg.det(torch.matmul(v, u))
+            diagonal = torch.stack(
+                [torch.ones_like(det), torch.ones_like(det), det], dim=-1
+            )
+            rot = torch.matmul(
+                torch.diag_embed(diagonal).to(u.device),
+                u,
+            )
+            rot = torch.matmul(v, rot)
+        else:
+            rot = torch.matmul(v, u)
+        pred_pose_centroid_fp = pred_pose_centroid.float()
+        true_pose_centroid_fp = true_pose_centroid.float()
+        pred_pose_centered_fp = pred_pose_centered.float()
+        translate = true_pose_centroid_fp - torch.matmul(
+            pred_pose_centroid_fp, rot.transpose(-1, -2)
+        )
+        pred_pose_translated = (
+            torch.matmul(pred_pose_centered_fp, rot.transpose(-1, -2))
+            + true_pose_centroid_fp
+        )
+
+    return (
+        pred_pose_translated.to(output_dtype),
+        rot.to(output_dtype),
+        translate.to(output_dtype),
     )
-
-    return pred_pose_translated, rot, translate
 
 
 def partially_aligned_rmsd(

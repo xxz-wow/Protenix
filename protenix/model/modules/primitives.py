@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import math
+import os
+import time
 from functools import partial
 from typing import Any, Optional, Union
 
@@ -28,6 +30,10 @@ from protenix.model.utils import (
     pad_at_dim,
     reshape_at_dim,
 )
+
+
+# Runtime counters are optional for normal imports.
+from protenix.model.musa_kernels.runtime import COUNTS as _quick_counts
 
 
 class Linear(nn.Linear):
@@ -83,7 +89,7 @@ class Linear(nn.Linear):
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         if self.precision is not None:
             input_dtype = input.dtype
-            with torch.amp.autocast("cuda", enabled=False):
+            with torch.amp.autocast(input.device.type, enabled=False):
                 bias = (
                     self.bias.to(dtype=self.precision)
                     if self.bias is not None
@@ -252,8 +258,13 @@ def _attention(
     """
     assert k.shape == v.shape
 
-    # Upcast to compute attn_weights
     input_dtype = q.dtype
+    full_aligned_fp32 = False
+    # Preserve the original MUSA math fallback outside the supported SDPA shapes.
+    if q.device.type == "musa":
+        use_efficient_implementation = False
+
+    # Upcast to compute attn_weights
     q = q.to(dtype=torch.float32)
     k = k.to(dtype=torch.float32)
     if attn_bias is not None:
@@ -269,7 +280,7 @@ def _attention(
         )
         return attn_output
 
-    with torch.amp.autocast("cuda", enabled=False):
+    with torch.amp.autocast(q.device.type, enabled=False):
         # [..., n_kv, d] -> [..., d, n_kv]
         k = k.transpose(-1, -2)
 
@@ -281,8 +292,6 @@ def _attention(
                 attn_weights += attn_bias
             else:
                 attn_weights = attn_weights + attn_bias
-
-        # [..., n_q, n_kv]
         attn_weights = F.softmax(attn_weights, dim=-1)
 
     # [..., n_q, n_kv], [..., n_kv, d] -> [..., n_q, d]
